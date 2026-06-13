@@ -1,0 +1,22 @@
+seed: 99
+
+data:
+  test_split: 0.15
+  val_split: 0.15
+  yolo_yaml_path: configs/yolo.yaml
+  raw_dir: data/raw
+  raw_subdir: agri_data/data
+  processed_dir: data/processed
+
+model:
+  weights: yolov8n.pt
+  imgsz: 32 #512
+
+train:
+  epochs: 1
+  batch_size: 16
+
+
+
+
+  
