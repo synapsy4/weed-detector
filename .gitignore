@@ -1,4 +1,5 @@
 venv/
 data/
-runs/
+models/
+outputs/
 src/__pycache__/
