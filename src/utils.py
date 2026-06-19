@@ -21,7 +21,9 @@ def load_config(
         return yaml.safe_load(f)
     
 
-def get_idx_to_class(raw_dir: Path | str = "data/raw") -> dict:
+def get_idx_to_class(
+        raw_dir: Path | str = "data/raw"
+        ) -> dict:
     """
     Creates index to class mapping dict.
     """
@@ -58,6 +60,41 @@ def write_yolo_yaml(
         yaml.dump(content, f, sort_keys=False)
 
     print(f"[INFO] YOLO data config written to '{yolo_yaml_path}'")
+
+
+def get_weights_path(
+        config: dict,
+        cp: str = "last"
+        ) -> Path:
+    """
+    Get the path to trained model weights for model specified in config.
+    """
+    if cp not in ["last", "best"]:
+        raise ValueError(f"cp must be one of {'last', 'best'}, you chose '{cp}'.")
+
+    model_out_dir = get_model_out_dir(config=config, mode="train")
+    weights_path = model_out_dir / "weights" / f"{cp}.pt"
+
+    return weights_path
+
+def get_model_out_dir(
+        config: dict,
+        mode: str
+        ) -> Path:
+    """
+    Get the output directory for the model specified in config.
+    """
+    if mode not in ["train", "eval"]:
+        raise ValueError(f"mode must be one of {'train', 'eval'}, you chose '{mode}'")
+    
+    model_out_dir = Path(config["model"]["out_dir"]) / config["model"]["model_name"] 
+    if mode == "train":
+        model_out_dir = model_out_dir / config["model"]["train_subdir"]
+    else:
+        model_out_dir = model_out_dir / config["model"]["eval_subdir"]
+
+    return model_out_dir
+    
 
 
 def get_lbl_arrays(lbl_path):
