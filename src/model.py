@@ -4,6 +4,7 @@ Init YOLO model, training, evaluation and prediction functions
 
 from pathlib import Path
 
+import torch
 from ultralytics import YOLO
 from ultralytics.utils.metrics import DetMetrics
 
@@ -45,6 +46,8 @@ def train(
             )
         model_out_dir.mkdir(parents=True, exist_ok=True)
 
+        device = 0 if torch.cuda.is_available() else "cpu"
+
         # Run training
         metrics = model.train(
             data=config["data"]["yolo_yaml_path"],
@@ -52,7 +55,8 @@ def train(
             batch=config["train"]["batch_size"],
             imgsz=config["model"]["imgsz"],
             seed=config["seed"],
-            save_dir=model_out_dir
+            save_dir=model_out_dir,
+            device=device
             ) 
         
     return metrics
@@ -70,12 +74,15 @@ def eval(
         config=config,
         mode="eval"
         )
+    
+    device = 0 if torch.cuda.is_available() else "cpu"
 
     # Run validation on test set
     metrics = model.val(
         data=config["data"]["yolo_yaml_path"],
         split="test",
-        save_dir=model_out_dir
+        save_dir=model_out_dir,
+        device=device
     )
 
     return metrics
@@ -103,6 +110,8 @@ def resume_train(
             mode="train"
             )
         
+        device = 0 if torch.cuda.is_available() else "cpu"
+
         # Run training
         metrics = model.train(
             resume=True,
@@ -111,7 +120,8 @@ def resume_train(
             batch=config["train"]["batch_size"],
             imgsz=config["model"]["imgsz"],
             seed=config["seed"],
-            save_dir=model_out_dir
+            save_dir=model_out_dir,
+            device=device
             )
         return metrics
     
