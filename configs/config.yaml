@@ -9,16 +9,16 @@ data:
   processed_dir: data/processed
 
 model:
-  model_name: modelv0
+  model_name: modelv2
   weights: yolov8n.pt
-  imgsz: 32 #512
+  imgsz: 512
   weights_dir: models
   out_dir: outputs
   train_subdir: train
   eval_subdir: eval
 
 train:
-  epochs: 1
+  epochs: 20
   batch_size: 16
 
 

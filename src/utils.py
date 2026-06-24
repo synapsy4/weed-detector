@@ -3,13 +3,11 @@ Utility + helper functions
 """
 
 import yaml
-import random
 from pathlib import Path
-from PIL import Image
 
+import torch
 import numpy as np
-import matplotlib.pyplot as plt
-from matplotlib.patches import Rectangle
+
 
 def load_config(
         path: Path | str = "configs/config.yaml"
@@ -96,7 +94,6 @@ def get_model_out_dir(
     return model_out_dir
     
 
-
 def get_lbl_arrays(lbl_path):
     """ 
     Get class (int) + bbox (float) arrays from txt-label file
@@ -113,62 +110,51 @@ def get_lbl_arrays(lbl_path):
     return classes, bbxs
 
 
-def visualize_sample(img_path, lbl_path, idx_to_class, ax=None):
+def get_device() -> int | str:
     """
-    Visualize a sample and its labeled bbxs.
+    Return GPU index 0 if available, otherwise CPU.
+    """
+    device = 0 if torch.cuda.is_available() else "cpu"
+
+    return device
+
+
+def build_train_kwargs(
+        config: dict,
+        model_out_dir: Path,
+        resume: bool = False
+        ) -> dict:
+    """
+    Define keyword arguments for YOLO's train call.
+    """
+    kwargs = dict(
+            data=config["data"]["yolo_yaml_path"],
+            epochs=config["train"]["epochs"],
+            batch=config["train"]["batch_size"],
+            imgsz=config["model"]["imgsz"],
+            seed=config["seed"],
+            save_dir=model_out_dir,
+            device=get_device(),
+            resume=resume
+    )
+
+    return kwargs
+
+
+def ask_resume(weights_path: Path | str) -> str:
+    """
+    Ask user whether to resume or abort training.
     """
 
-    if ax is None:
-        _, ax = plt.subplots(1,1,figsize=(10,10))
-    
-    colors = {0: "green", 1: "red"}
-    counts = {0: 0, 1: 0}
-    
-    img = Image.open(img_path)
-    W,H = img.size
+    while True:
+        choice = input(
+                f"Weights found at '{weights_path}'.\n"
+                "Resume training (y) or exit (n)? "
+                ).lower()
+        if choice in ("y", "n"):
+            break
+        print("Choose a valid option ('y' or 'n').")
 
-    classes, bbxs = get_lbl_arrays(lbl_path)
-
-    for c,(x_c, y_c, w, h) in zip(classes, bbxs):
-
-        w, h = w * W, h * H
-        x_c, y_c = x_c * W, y_c * H
-        x_min, y_min = x_c - w/2 , y_c - h/2
-
-        counts[c] += 1
-
-        ax.imshow(img)
-        ax.add_patch(Rectangle((x_min,y_min), w, h, fc ='none', ec=colors[c], lw=2))
-
-        ax.text(
-                x_min, y_min, idx_to_class[c],
-                color="white", fontsize=9, va="bottom", ha="left",
-                bbox=dict(facecolor=colors[c], edgecolor="none", pad=1.5),
-            )
-
-    ax.axis("off")
+    return choice
 
 
-def inspect_rnd_samples(k=4):
-    """
-    Visualize k random data-label pairs
-    """
-    
-    # Get random image path
-    data_dir = Path("data/raw/agri_data/data")
-    img_paths = list(data_dir.glob("*.jpeg"))
-    rnd_img_paths = random.sample(img_paths, k)
-
-    # Get class mapping
-    classes_path = Path("data/raw/classes.txt")
-    classes = open(classes_path, "r").read().split()
-    idx_to_class = {i: c for i,c in enumerate(classes)}
- 
-    _, axs = plt.subplots(1,k,figsize=(5*k,5))
-
-    for img_path, ax in zip(rnd_img_paths, axs):
-        # Get label path
-        img_id = img_path.stem
-        lbl_path = data_dir / (img_id +".txt")
-
-        visualize_sample(img_path, lbl_path, idx_to_class, ax)
