@@ -3,23 +3,26 @@ seed: 99
 data:
   test_split: 0.15
   val_split: 0.15
-  yolo_yaml_path: configs/yolo.yaml
-  raw_dir: data/raw
-  raw_subdir: agri_data/data
-  processed_dir: data/processed
 
 model:
   model_name: modelv2
-  weights: yolov8n.pt
+  pretrained_weights: yolov8n.pt
   imgsz: 512
-  weights_dir: models
-  out_dir: outputs
-  train_subdir: train
-  eval_subdir: eval
 
 train:
-  epochs: 20
+  epochs: 2
   batch_size: 16
+  resume_blocking: False
+
+paths:
+  raw_dir: data/raw
+  raw_data_dir: data/raw/agri_data/data
+  processed_data_dir: data/processed
+  yolo_yaml_path: configs/yolo.yaml
+  models_pretrained_dir: models/pretrained
+  models_trained_dir: models/trained
+
+
 
 
 

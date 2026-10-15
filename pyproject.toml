@@ -1,0 +1,30 @@
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[project]
+name = "weed-detector"
+version = "0.1.0"
+description = "YOLO based weed vs. crop detector and classifier."
+readme = "README.md"
+requires-python = ">=3.12"
+dependencies = [
+    "ultralytics==8.4.66",
+    "torch",
+    "kagglehub==1.0.2",
+    "matplotlib==3.11.0",
+    "numpy==2.0.0",
+    "Pillow==11.2.1",
+    "PyYAML==6.0.2",
+    "scikit_learn==1.9.0",
+]
+
+[dependency-groups]
+dev = [
+    "ipykernel",
+    "ipython",
+    "jupyter",
+]
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/weed_detector"]

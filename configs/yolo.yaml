@@ -1,4 +1,4 @@
-path: data/processed
+path: /home/adrian/projects/weed-detector/data/processed
 train: images/train
 val: images/val
 test: images/test
