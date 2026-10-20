@@ -5,9 +5,15 @@ Callable function to run training, evaluation or prediction
 import argparse
 from pathlib import Path
 
-from utils import load_config, write_yolo_yaml, get_weights_path
-from weed_detector.data.preprocess import create_data_splits
-from model import load_model, train, eval, predict
+from weed_detector.config import load_config
+from weed_detector.utils import setup_logger, get_logger, write_yolo_yaml, get_weights_path
+from weed_detector.data import create_data_splits
+from weed_detector.model import load_model
+from weed_detector.training import train, evaluate
+from weed_detector.inference import predict
+
+setup_logger(level="INFO")
+logger = get_logger(__name__)
 
 
 def parse_args():
@@ -21,9 +27,14 @@ def parse_args():
 
 
 def main():
+
+    logger.info("Manual run starting")
+
     args = parse_args()
     config_path = args.config_root + "/" + args.config
-    config = load_config(config_path)
+    config = load_config(path=config_path)
+
+    logger.info(f"Running mode: '{args.mode}'")
 
     if args.name is not None:
         config["model"]["model_name"] = args.name
@@ -32,27 +43,22 @@ def main():
     if args.mode == "train":
 
         create_data_splits(
-            raw_dir=config["data"]["raw_dir"],
-            raw_subdir=config["data"]["raw_subdir"],
-            processed_dir=config["data"]["processed_dir"],
+            raw_data_dir=config["paths"]["raw_data_dir"],
+            processed_data_dir=config["paths"]["processed_data_dir"],
             val_split_ratio=config["data"]["val_split"],
             test_split_ratio=config["data"]["test_split"],
             seed=config["seed"]
-            )
+        )
         
         write_yolo_yaml(
-            raw_dir=config["data"]["raw_dir"],
-            processed_dir=config["data"]["processed_dir"],
-            yolo_yaml_path=config["data"]["yolo_yaml_path"]
+            raw_dir=config["paths"]["raw_dir"],
+            processed_data_dir=config["paths"]["processed_data_dir"],
+            yolo_yaml_path=config["paths"]["yolo_yaml_path"]
         )
-
-        weights_path = Path(config["model"]["weights_dir"]) / config["model"]["weights"]
-        model = load_model(weights_path=weights_path)
         
-        train(    
-            model=model,
+        train(
             config=config
-            )
+        )
 
     # ------------- Eval model -------------
     elif args.mode == "eval":
@@ -61,20 +67,26 @@ def main():
             config=config,
             cp="best"
             )
+        logger.info(f"Loading best weights from '{weights_path}'")
         model = load_model(weights_path=weights_path)
         
-        eval(
+        evaluate(
             model=model,
             config=config
-            )
+        )
 
     # ------------- Make prediction -------------
     elif args.mode == "predict":
         
+        if args.source is None:
+            logger.error("--source is required for predict mode")
+            raise SystemExit(1)
+
         weights_path = get_weights_path(
             config=config,
             cp="best"
             )
+        logger.info(f"Loading best weights from '{weights_path}'")
         model = load_model(weights_path=weights_path)
         
         predict(

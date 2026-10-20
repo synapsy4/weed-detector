@@ -17,6 +17,10 @@ dependencies = [
     "Pillow==11.2.1",
     "PyYAML==6.0.2",
     "scikit_learn==1.9.0",
+    "fastapi==0.115.0",
+    "uvicorn==0.32.0",
+    "python-multipart==0.0.9",
+    "prometheus_client==0.21.0",
 ]
 
 [dependency-groups]
@@ -24,7 +28,18 @@ dev = [
     "ipykernel",
     "ipython",
     "jupyter",
+    "pytest",
+    "pytest-cov",
+    "ruff",
+    "httpx",
+    "mypy",
 ]
 
 [tool.hatch.build.targets.wheel]
 packages = ["src/weed_detector"]
+
+[tool.mypy]
+ignore_missing_imports = true
+warn_return_any = false
+warn_unused_configs = true
+disallow_untyped_defs = false

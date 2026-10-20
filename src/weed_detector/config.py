@@ -6,19 +6,23 @@ from pathlib import Path
 
 import yaml
 
+from weed_detector.utils import get_logger
+
+logger = get_logger(__name__)
 
 PROJECT_ROOT = Path(__file__).resolve().parents[2]
 DEFAULT_CONFIG_PATH = PROJECT_ROOT / "configs" / "config.yaml"
 
 
 def load_config(
-        path: Path | str = DEFAULT_CONFIG_PATH,
-        root: Path | str = PROJECT_ROOT
-        ) -> dict:
+    path: Path | str = DEFAULT_CONFIG_PATH, root: Path | str = PROJECT_ROOT
+) -> dict:
     """
     Load the hyperparameter config from given path.
     """
-    
+
+    logger.info(f"Loading config from '{path}'")
+
     path = Path(path)
     if not path.is_absolute():
         path = PROJECT_ROOT / path
@@ -36,4 +40,5 @@ def load_config(
             configured_path = root / configured_path
         config["paths"][key] = str(configured_path.resolve())
 
+    logger.info("Config loaded successfully")
     return config

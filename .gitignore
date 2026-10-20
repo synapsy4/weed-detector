@@ -33,3 +33,6 @@ configs/yolo.yaml
 .idea/
 .DS_Store
 Thumbs.db
+
+# Documentation
+docs/
