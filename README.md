@@ -139,7 +139,7 @@ Start the FastAPI server:
 uv run uvicorn weed_detector.api.main:app --host 0.0.0.0 --port 8000
 ```
 
-The service loads the best trained weights (`models/trained/modelv2/train/weights/best.pt`) on startup. If no trained weights exist, it falls back to the pretrained `yolov8n.pt`.
+The service loads the best trained weights (`models/trained/modelv0/train/weights/best.pt`) on startup. If no trained weights exist, it falls back to the pretrained `yolov8n.pt`.
 
 #### Endpoints
 
@@ -177,7 +177,7 @@ curl -X POST http://localhost:8000/predict \
     }
   ],
   "image_size": [512, 512],
-  "model_name": "modelv2"
+  "model_name": "modelv0"
 }
 ```
 
@@ -197,7 +197,7 @@ data:
   test_split: 0.15
   val_split: 0.15
 model:
-  model_name: modelv2
+  model_name: modelv0
   pretrained_weights: yolov8n.pt
   imgsz: 512
 train:
