@@ -3532,7 +3532,7 @@ dev = [
     { name = "pre-commit" },
     { name = "pytest" },
     { name = "pytest-cov" },
-    { name = "ruff" },
+    { name = "ruff", specifier = "==0.17.1" },
 ]
 
 [[package]]

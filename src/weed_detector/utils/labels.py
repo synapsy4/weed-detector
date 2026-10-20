@@ -13,7 +13,7 @@ def get_idx_to_class(raw_dir: Path | str = "data/raw") -> dict:
     """
     # Open classes.txt from raw data dir
     classes_path = Path(raw_dir) / "classes.txt"
-    with open(classes_path, "r") as f:
+    with open(classes_path) as f:
         classes = f.read().split()
 
     return {i: c for i, c in enumerate(classes)}

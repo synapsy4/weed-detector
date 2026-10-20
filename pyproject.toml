@@ -30,7 +30,7 @@ dev = [
     "jupyter",
     "pytest",
     "pytest-cov",
-    "ruff",
+    "ruff==0.17.1",
     "httpx",
     "mypy",
     "pre-commit",
@@ -44,3 +44,9 @@ ignore_missing_imports = true
 warn_return_any = false
 warn_unused_configs = true
 disallow_untyped_defs = false
+
+[tool.ruff]
+src = ["src", "tests"]
+
+[tool.ruff.lint.isort]
+known-first-party = ["weed_detector"]
