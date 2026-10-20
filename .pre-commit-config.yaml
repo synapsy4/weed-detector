@@ -2,20 +2,6 @@
 #
 # Install:  uv run pre-commit install
 # Run all:  uv run pre-commit run --all-files
-#
-# This file MUST live at the repository root under the name
-# `.pre-commit-config.yaml` -- that name is pre-commit's built-in default
-# and is what the installed git hook references. Moving it elsewhere would
-# break `pre-commit run --all-files` and require `-c <path>` everywhere.
-#
-# The ruff hooks APPLY FIXES automatically (`--fix` + formatting); the
-# remaining hooks mirror the GitHub Actions CI pipeline exactly:
-#   ruff check -> ruff format -> mypy -> pytest (coverage)
-#
-# The package build (`uv build`) is intentionally NOT part of the local hook
-# chain: it only produces the publishable wheel/sdist, which CI already does
-# in `.github/workflows/ci.yml`. Building locally would just create a `dist/`
-# directory that has to be cleaned up again.
 
 repos:
   # Ruff lint (with auto-fix) and formatting.
