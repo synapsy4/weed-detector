@@ -18,7 +18,7 @@ venv/
 .ipynb_checkpoints/
 
 # Data (raw and processed)
-data/
+/data/
 
 # Model weights and training artifacts
 models/
