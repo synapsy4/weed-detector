@@ -34,5 +34,14 @@ configs/yolo.yaml
 .DS_Store
 Thumbs.db
 
-# Documentation
+# Testing and tooling caches
+.coverage
+.coverage.*
+htmlcov/
+coverage.xml
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+
+# Dev docs
 docs/

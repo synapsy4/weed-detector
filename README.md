@@ -93,6 +93,24 @@ uv sync
 # Activate the virtual environment
 source .venv/bin/activate
 ```
+
+## Code Quality & Local CI
+
+All checks (lint, format, type check, tests with coverage) run
+locally with a **single command**:
+
+```bash
+uv run pre-commit run --all-files
+```
+
+This mirrors the GitHub Actions pipeline exactly (see `.github/workflows/ci.yml`).
+
+To run the checks automatically on every `git commit`, install the Git hook once:
+
+```bash
+uv run pre-commit install
+```
+
 ## Usage
 
 ### 1. Command-Line Interface (CLI)

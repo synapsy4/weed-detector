@@ -1,0 +1,50 @@
+# Pre-commit hooks for the weed-detector project.
+#
+# Install:  uv run pre-commit install
+# Run all:  uv run pre-commit run --all-files
+#
+# This file MUST live at the repository root under the name
+# `.pre-commit-config.yaml` -- that name is pre-commit's built-in default
+# and is what the installed git hook references. Moving it elsewhere would
+# break `pre-commit run --all-files` and require `-c <path>` everywhere.
+#
+# The ruff hooks APPLY FIXES automatically (`--fix` + formatting); the
+# remaining hooks mirror the GitHub Actions CI pipeline exactly:
+#   ruff check -> ruff format -> mypy -> pytest (coverage)
+#
+# The package build (`uv build`) is intentionally NOT part of the local hook
+# chain: it only produces the publishable wheel/sdist, which CI already does
+# in `.github/workflows/ci.yml`. Building locally would just create a `dist/`
+# directory that has to be cleaned up again.
+
+repos:
+  # Ruff lint (with auto-fix) and formatting.
+  #
+  # Scope matches the CI workflow exactly (`ruff check src/ tests/`), so
+  # running the hooks locally never rewrites files that CI does not check
+  # (notebooks/ and scripts/ are deliberately left untouched).
+  - repo: https://github.com/astral-sh/ruff-pre-commit
+    rev: v0.17.1
+    hooks:
+      - id: ruff-check
+        args: [--fix]
+        exclude: ^(notebooks|scripts)/
+      - id: ruff-format
+        exclude: ^(notebooks|scripts)/
+
+  # Local hooks mirroring the CI pipeline (invoked via uv).
+  - repo: local
+    hooks:
+      - id: mypy
+        name: mypy
+        entry: uv run mypy src/
+        language: system
+        always_run: true
+        pass_filenames: false
+
+      - id: pytest
+        name: pytest (coverage >= 80%)
+        entry: uv run pytest tests/ --cov=src/weed_detector --cov-fail-under=80
+        language: system
+        always_run: true
+        pass_filenames: false

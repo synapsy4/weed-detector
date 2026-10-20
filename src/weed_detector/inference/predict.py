@@ -31,10 +31,10 @@ def predict(
     result = results[0]
 
     # Unpack predictions
-    bbxs = result.boxes.xyxy.numpy()  
-    classes = result.boxes.cls.numpy()  
+    bbxs = result.boxes.xyxy.numpy()  # type: ignore[union-attr]
+    classes = result.boxes.cls.numpy()  # type: ignore[union-attr]
     class_names = [result.names[c] for c in classes]
-    scores = result.boxes.conf.numpy()  
+    scores = result.boxes.conf.numpy()  # type: ignore[union-attr]
 
     logger.info(
         f"Prediction complete: {len(bbxs)} box(es) detected, classes={class_names}"
