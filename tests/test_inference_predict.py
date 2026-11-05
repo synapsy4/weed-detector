@@ -26,7 +26,7 @@ def test_predict_returns_expected_dict_structure():
         result = predict(
             model=mock_model,
             config=config,
-            image_path="/tmp/test.jpg",
+            image_source="/tmp/test.jpg",
             conf_threshold=0.25,
             visualize_result=False,
         )
@@ -55,7 +55,7 @@ def test_predict_calls_model_with_correct_args():
         predict(
             model=mock_model,
             config=config,
-            image_path="/tmp/image.jpg",
+            image_source="/tmp/image.jpg",
             conf_threshold=0.5,
             visualize_result=False,
         )

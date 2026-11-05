@@ -2,8 +2,11 @@
 YOLO prediction function
 """
 
+import io
 from pathlib import Path
 
+import numpy as np
+from PIL import Image
 from ultralytics import YOLO
 
 from weed_detector.utils import get_logger
@@ -11,22 +14,34 @@ from weed_detector.visualization import plot_yolo_pred
 
 logger = get_logger(__name__)
 
+# Any source YOLO can run inference on: a file path, raw bytes, a PIL image,
+# or a numpy array.
+ImageSource = str | Path | bytes | Image.Image | np.ndarray
+
 
 def predict(
     model: YOLO,
     config: dict,
-    image_path: str | Path,
+    image_source: ImageSource,
     conf_threshold: float = 0.25,
     visualize_result: bool = True,
 ) -> dict:
     """
-    Make prediction on single image.
+    Make prediction on a single image.
+
+    ``image_source`` may be a file path, raw image bytes, a PIL Image, or a
+    numpy array
     """
-    logger.info(f"Running prediction on '{image_path}'")
+
+    logger.info(f"Running prediction on image source of type {type(image_source)}")
+
+    # YOLO does not consume raw bytes directly; normalise to a PIL Image.
+    if isinstance(image_source, (bytes, bytearray)):
+        image_source = Image.open(io.BytesIO(image_source))
 
     # Make prediction
     results = model.predict(
-        source=str(image_path), imgsz=config["model"]["imgsz"], conf=conf_threshold
+        source=image_source, imgsz=config["model"]["imgsz"], conf=conf_threshold
     )
     result = results[0]
 

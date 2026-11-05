@@ -3,8 +3,6 @@ Prediction service: wraps YOLO inference with validation.
 """
 
 import io
-import tempfile
-from pathlib import Path
 
 from PIL import Image
 from ultralytics import YOLO
@@ -73,21 +71,29 @@ class PredictionService:
         except Exception as exc:
             raise ValueError(f"Invalid image file: {exc}") from exc
 
-    def predict_from_path(
+    def predict_from_bytes(
         self,
-        image_path: str | Path,
+        file_content: bytes,
+        content_type: str,
         conf_threshold: float = 0.25,
     ) -> PredictionResponse:
-        """Run prediction on an image file path."""
+        """Run prediction on raw image bytes."""
+        self.validate_image(file_content, content_type)
+
         if self.model is None:
             raise RuntimeError("Model not loaded")
 
+        # Determine image size from bytes
+        with Image.open(io.BytesIO(file_content)) as img:
+            width, height = img.size
+
+        pil_image = Image.open(io.BytesIO(file_content))
         result = predict(
             model=self.model,
             config=self.config,
-            image_path=image_path,
+            image_source=pil_image,
             conf_threshold=conf_threshold,
-            visualize_result=False,  # never plot in the API service
+            visualize_result=False,
         )
 
         # Build response
@@ -110,35 +116,6 @@ class PredictionService:
 
         return PredictionResponse(
             predictions=predictions,
-            image_size=[0, 0],
+            image_size=[width, height],
             model_name=self.model_name,
         )
-
-    def predict_from_bytes(
-        self,
-        file_content: bytes,
-        content_type: str,
-        conf_threshold: float = 0.25,
-    ) -> PredictionResponse:
-        """Run prediction on raw image bytes (saves to temp file)."""
-        self.validate_image(file_content, content_type)
-
-        # Determine image size from bytes
-        with Image.open(io.BytesIO(file_content)) as img:
-            width, height = img.size
-
-        # Save to temp file for the predict() function (which expects a path)
-        suffix = ".jpg" if content_type == "image/jpeg" else ".png"
-        with tempfile.NamedTemporaryFile(suffix=suffix, delete=False) as tmp:
-            tmp.write(file_content)
-            tmp_path = tmp.name
-
-        try:
-            response = self.predict_from_path(
-                image_path=tmp_path,
-                conf_threshold=conf_threshold,
-            )
-            response.image_size = [width, height]
-            return response
-        finally:
-            Path(tmp_path).unlink(missing_ok=True)

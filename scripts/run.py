@@ -92,7 +92,7 @@ def main():
         predict(
             model=model,
             config=config,
-            source=args.source)
+            image_source=args.source)
 
 
 if __name__ == "__main__":
