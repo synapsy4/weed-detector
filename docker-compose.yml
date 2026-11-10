@@ -1,0 +1,12 @@
+services:
+  api:
+    build:
+      context: .
+      dockerfile: docker/Dockerfile.api
+    ports:
+      - "8000:8000"
+    environment:
+      - PYTHONUNBUFFERED=1 # print statements and log messages appear immediately in the logs
+    volumes:
+      - ./models:/app/models:ro
+    restart: unless-stopped

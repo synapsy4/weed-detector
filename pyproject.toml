@@ -11,6 +11,8 @@ requires-python = ">=3.12"
 dependencies = [
     "ultralytics==8.4.66",
     "torch",
+    "torchvision",
+    "opencv-python-headless>=4.8",
     "kagglehub==1.0.2",
     "matplotlib==3.11.0",
     "numpy==2.0.0",
@@ -35,6 +37,20 @@ dev = [
     "mypy",
     "pre-commit",
 ]
+
+[tool.uv]
+# ultralytics depends on opencv-python (GUI build, needs libGL).
+# This removes it so only opencv-python-headless gets installed.
+override-dependencies = ["opencv-python; sys_platform == 'never'"]
+
+[tool.uv.sources]
+torch = { index = "pytorch-cpu", marker = "sys_platform == 'linux'" }
+torchvision = { index = "pytorch-cpu", marker = "sys_platform == 'linux'" }
+
+[[tool.uv.index]]
+name = "pytorch-cpu"
+url = "https://download.pytorch.org/whl/cpu"
+explicit = true
 
 [tool.hatch.build.targets.wheel]
 packages = ["src/weed_detector"]

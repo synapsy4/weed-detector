@@ -19,9 +19,9 @@ The project provides:
 ```
 weed-detector/
 ├── README.md                    # This file
-├── docs/                          # Development plan and architecture
 ├── pyproject.toml               # Project metadata + dependencies (uv)
 ├── uv.lock                      # Locked dependency tree
+├── docker-compose.yml           # Docker compose file
 ├── .python-version              # Python 3.12
 ├── .gitignore                   # Git ignore rules
 ├── configs/
@@ -30,6 +30,9 @@ weed-detector/
 ├── data/
 │   ├── raw/                     # Downloaded Kaggle dataset (gitignored)
 │   └── processed/               # Train/val/test splits in YOLO format (gitignored)
+├── docker/
+│   ├── .dockerignore            # Docker ignore rules
+│   └── Dockerfile.api           # Prediction API dockerfile
 ├── models/
 │   ├── pretrained/              # yolov8n.pt (gitignored)
 │   └── trained/                 # Fine-tuned model weights (gitignored)
@@ -187,6 +190,18 @@ curl -X POST http://localhost:8000/predict \
 curl http://localhost:8000/health
 # {"status":"ok","model_loaded":true}
 ```
+
+### Docker Containerization
+
+The project can be run via Docker Compose:
+
+```bash
+docker compose up --build
+```
+
+This will build the API service from `docker/Dockerfile.api` and expose it on port 8000.
+
+
 ## Configuration
 
 Edit `configs/config.yaml` to change hyperparameters:
@@ -240,7 +255,7 @@ Images are 512×512 pixels.
 
 - ✅ Phase 0: Codebase finetuning (logging, `__init__.py` exports, bug fixes) — **completed**
 - ✅ Phase 1: FastAPI prediction service — **completed** (`POST /predict`, `GET /health`, `GET /metrics`)
-- ⬜ Phase 2: Docker containerization
+- ✅ Phase 2: Docker containerization — **completed**
 - ⬜ Phase 3: nginx security layer
 - ⬜ Phase 4: Experiment tracking (MLflow) + data versioning (DVC on DagsHub)
 - ⬜ Phase 5: Monitoring (Prometheus + Grafana)
