@@ -193,14 +193,43 @@ curl http://localhost:8000/health
 
 ### Docker Containerization
 
-The project can be run via Docker Compose:
+Run the stack with Docker Compose:
 
 ```bash
 docker compose up --build
 ```
 
-This will build the API service from `docker/Dockerfile.api` and expose it on port 8000.
+This starts the FastAPI app and an nginx reverse proxy in front of it. The API remains internal to Docker; nginx is the public entry point.
 
+Local access (current default for this environment):
+
+```yaml
+ports:
+  - "8080:80"
+  - "8443:443"
+```
+
+Example checks:
+
+```bash
+curl http://localhost:8080/health
+curl -k https://localhost:8443/health
+```
+
+If you want to use the hostname alias locally, add it once to `/etc/hosts`:
+
+```bash
+127.0.0.1 weed-detector
+```
+
+Then the same routes are available as:
+
+```bash
+curl http://weed-detector:8080/health
+curl -k  https://weed-detector:8443/health
+```
+
+The nginx layer enforces a 10 MB upload cap, rate limiting on `/predict`, and hardened security headers.
 
 ## Configuration
 
@@ -256,7 +285,7 @@ Images are 512×512 pixels.
 - ✅ Phase 0: Codebase finetuning (logging, `__init__.py` exports, bug fixes) — **completed**
 - ✅ Phase 1: FastAPI prediction service — **completed** (`POST /predict`, `GET /health`, `GET /metrics`)
 - ✅ Phase 2: Docker containerization — **completed**
-- ⬜ Phase 3: nginx security layer
+- ✅ Phase 3: nginx security layer — **completed**
 - ⬜ Phase 4: Experiment tracking (MLflow) + data versioning (DVC on DagsHub)
 - ⬜ Phase 5: Monitoring (Prometheus + Grafana)
 - ⬜ Phase 6: Vanilla HTML/JS UI

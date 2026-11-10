@@ -111,6 +111,11 @@ async def predict_endpoint(
     return response
 
 
+@router.get("/")
+async def root():
+    return {"message": "Weed Detector API", "health": "/health"}
+
+
 @router.get(
     "/health",
     response_model=HealthResponse,

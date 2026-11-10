@@ -43,5 +43,9 @@ coverage.xml
 .mypy_cache/
 .ruff_cache/
 
+# nginx
+docker/nginx/certs/nginx.crt
+docker/nginx/certs/nginx.key
+
 # Dev docs
 docs/
