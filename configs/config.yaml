@@ -5,12 +5,12 @@ data:
   val_split: 0.15
 
 model:
-  model_name: modelv2
+  model_name: modelv0
   pretrained_weights: yolov8n.pt
-  imgsz: 512
+  imgsz: 64 #512
 
 train:
-  epochs: 2
+  epochs: 1
   batch_size: 16
   resume_blocking: False
 

@@ -1,239 +1,157 @@
 # Weed Detector
 
-YOLO-based crop vs. weed detection and classification service.
+YOLO-based crop-vs-weed detection service for training, evaluating, and serving a plant-detection model.
 
 ## Overview
 
-The **Weed Detector** is a computer vision service that detects and classifies plants in images as either **crop** or **weed**. It uses a fine-tuned YOLOv8n model trained on the [Kaggle Crop and Weed Detection Dataset](https://www.kaggle.com/datasets/ravirajsinh45/crop-and-weed-detection-data-with-bounding-boxes).
+This project trains a YOLOv8-based model to detect weeds and crops in plant imagery and exposes the trained model through a FastAPI service. It is designed for local experimentation and reproducible training runs, with dataset versioning and experiment tracking backed by DVC and MLflow through DagsHub.
 
-The project provides:
+The repository combines:
 
-- **Data pipeline**: download, preprocess, and split raw images/labels into YOLO-format train/val/test sets
-- **Training**: fine-tune YOLOv8n on the crop/weed dataset with resume support
-- **Evaluation**: run validation on the test split with metrics and visualizations
-- **Prediction service**: a FastAPI HTTP API that accepts image uploads and returns bounding boxes with class labels and confidence scores
-- **Observability**: structured logging throughout, Prometheus metrics exposed at `/metrics`
+- a data processing pipeline for downloading and structuring the raw dataset
+- YOLO training and evaluation workflows
+- a prediction API for inference on uploaded images
+- DVC-based versioning for data and model artifacts
+- MLflow-based tracking for experiment metadata, parameters, and metrics
+- Docker-based runtime setup for local deployment
 
-## Project Structure
+## Project structure
 
-```
+```text
 weed-detector/
-├── README.md                    # This file
-├── pyproject.toml               # Project metadata + dependencies (uv)
-├── uv.lock                      # Locked dependency tree
-├── docker-compose.yml           # Docker compose file
-├── .python-version              # Python 3.12
-├── .gitignore                   # Git ignore rules
+├── README.md
+├── pyproject.toml
+├── uv.lock
+├── docker-compose.yml
+├── .env.example
+├── .dvc/
+├── dvc.yaml
 ├── configs/
-│   ├── config.yaml              # Hyperparameters, paths, train settings
-│   └── yolo.yaml                # YOLO data configuration (auto-generated)
+│   ├── config.yaml
+│   └── yolo.yaml
 ├── data/
-│   ├── raw/                     # Downloaded Kaggle dataset (gitignored)
-│   └── processed/               # Train/val/test splits in YOLO format (gitignored)
+│   ├── raw/
+│   └── processed/
 ├── docker/
-│   ├── .dockerignore            # Docker ignore rules
-│   └── Dockerfile.api           # Prediction API dockerfile
+│   ├── Dockerfile.api
+│   ├── Dockerfile.nginx
+│   └── nginx/
+├── docs/
+│   └── DEVELOPMENT_PLAN.md
 ├── models/
-│   ├── pretrained/              # yolov8n.pt (gitignored)
-│   └── trained/                 # Fine-tuned model weights (gitignored)
-├── notebooks/                   # Jupyter notebooks for exploration
+│   ├── pretrained/
+│   └── trained/
+├── notebooks/
 ├── scripts/
-│   └── run.py                   # CLI entry point (train/eval/predict)
-└── src/
-    └── weed_detector/           # Python package
-        ├── __init__.py
-        ├── config.py            # YAML config loader
-        ├── api/
-        │   ├── __init__.py
-        │   ├── main.py          # FastAPI app factory + lifespan
-        │   ├── schemas.py       # Pydantic request/response models
-        │   ├── service.py       # PredictionService (model + validation)
-        │   └── routes/
-        │       ├── __init__.py
-        │       └── predict.py   # POST /predict, GET /health, GET /metrics
-        ├── data/
-        │   ├── __init__.py
-        │   ├── download.py      # Kaggle dataset download
-        │   └── preprocess.py    # Train/val/test splitting
-        ├── inference/
-        │   ├── __init__.py
-        │   └── predict.py       # Single-image prediction wrapper
-        ├── model/
-        │   ├── __init__.py
-        │   └── detector.py      # YOLO model loading
-        ├── training/
-        │   ├── __init__.py
-        │   ├── train.py         # Training entry point
-        │   └── evaluate.py      # Evaluation entry point
-        ├── utils/
-        │   ├── __init__.py
-        │   ├── logging.py       # Structured logging setup
-        │   ├── labels.py        # Class index <-> name mapping
-        │   ├── paths.py         # Path resolution helpers
-        │   └── yolo.py          # YOLO YAML writer, train kwargs, device selection
-        └── visualization/
-            ├── __init__.py
-            └── plots.py         # Bounding-box visualization
+│   └── run.py
+├── src/
+│   └── weed_detector/
+│       ├── api/
+│       ├── config.py
+│       ├── data/
+│       ├── inference/
+│       ├── model/
+│       ├── training/
+│       ├── utils/
+│       └── visualization/
+├── tests/
+└── .gitignore
 ```
 
+## Requirements
 
-## Prerequisites
+- Python 3.12
+- [uv](https://github.com/astral-sh/uv)
+- Git
+- A DagsHub account and repository for the MLflow/DVC integration
+- Kaggle access for downloading the dataset used by the training pipeline
 
-- Python ≥ 3.12
-- [uv](https://github.com/astral-sh/uv) package manager (recommended)
-- CPU is sufficient for inference; GPU optional (CUDA detected automatically if available)
+## Local setup
 
-## Setup
+1. Clone the repository
 
 ```bash
-# Clone the repository
 git clone https://github.com/synapsy4/weed-detector.git
 cd weed-detector
+```
 
-# Install dependencies (creates .venv)
+2. Create the project environment and install dependencies
+
+```bash
 uv sync
-
-# Activate the virtual environment
 source .venv/bin/activate
 ```
 
-## Code Quality & Local CI
-
-All checks (lint, format, type check, tests with coverage) run
-locally with a **single command**:
+3. Create a local environment file from the template
 
 ```bash
-uv run pre-commit run --all-files
+cp .env.example .env
 ```
 
-This mirrors the GitHub Actions pipeline exactly (see `.github/workflows/ci.yml`).
+4. Fill in the values in `.env` with your project-specific settings:
 
-To run the checks automatically on every `git commit`, install the Git hook once:
+```text
+DAGSHUB_REPO_URL=https://dagshub.com/<owner>/<repo>
+DAGSHUB_TOKEN=<your_dagshub_token>
+MLFLOW_TRACKING_URI=https://dagshub.com/<owner>/<repo>.mlflow
+MLFLOW_TRACKING_TOKEN=<your_dagshub_token>
+MLFLOW_EXPERIMENT_NAME=weed-detector
+DVC_REMOTE_URL=https://dagshub.com/<owner>/<repo>.dvc
+```
+
+The values above are required for the DVC remote and the MLflow tracking backend used by the project.
+
+## DVC and MLflow setup
+
+This repository is configured to store data and model artifacts in DVC and to send training metadata to MLflow on DagsHub.
+
+### One-time DVC remote configuration
 
 ```bash
-uv run pre-commit install
+uv run dvc remote default origin
 ```
 
-## Usage
-
-### 1. Command-Line Interface (CLI)
-
-The CLI supports three modes: `train`, `eval`, and `predict`.
+If the remote is not yet registered, configure it once with:
 
 ```bash
-python scripts/run.py --mode train --config config.yaml --config-root configs
-python scripts/run.py --mode eval   --config config.yaml --config-root configs
-python scripts/run.py --mode predict --config config.yaml --config-root configs --source path/to/image.jpg
+uv run dvc remote add origin "$DVC_REMOTE_URL"
 ```
 
-| Flag | Description |
-|------|-------------|
-| `--mode` | `train`, `eval`, or `predict` (required) |
-| `--config` | Config filename (default: `config.yaml`) |
-| `--config-root` | Config directory (default: `configs`) |
-| `--name` | Override experiment/model name |
-| `--source` | Image path for `predict` mode (required) |
-
-### 2. Prediction API Service
-
-Start the FastAPI server:
+### Training workflow with tracking enabled
 
 ```bash
-uv run uvicorn weed_detector.api.main:app --host 0.0.0.0 --port 8000
+uv run dvc status
+uv run python scripts/run.py download
+uv run python scripts/run.py preprocess
+uv run python scripts/run.py train
+uv run python scripts/run.py eval
+uv run dvc push
 ```
 
-The service loads the best trained weights (`models/trained/modelv0/train/weights/best.pt`) on startup. If no trained weights exist, it falls back to the pretrained `yolov8n.pt`.
+The `scripts/run.py` CLI is the project entry point for the pipeline stages. DVC calls these same commands to keep the data lifecycle reproducible and consistent.
 
-#### Endpoints
+## CLI usage
 
-| Endpoint | Method | Description |
-|----------|--------|-------------|
-| `GET /health` | Health check | Returns `{"status": "ok", "model_loaded": true}` |
-| `POST /predict` | Predict | Upload an image, get bounding boxes with classes and confidences |
-| `GET /metrics` | Metrics | Prometheus-formatted metrics |
-| `GET /docs` | API docs | Interactive Swagger UI |
-
-#### Example: Call the prediction endpoint
+The canonical CLI interface is subcommand based:
 
 ```bash
-curl -X POST http://localhost:8000/predict \
-  -F "file=@path/to/image.jpg" \
-  -F "conf_threshold=0.25"
+uv run python scripts/run.py download
+uv run python scripts/run.py preprocess
+uv run python scripts/run.py train
+uv run python scripts/run.py eval
+uv run python scripts/run.py predict --source path/to/image.jpg
 ```
 
-#### Example response
+Common options:
 
-```json
-{
-  "predictions": [
-    {
-      "bbox": {"x1": 122.1, "y1": 64.9, "x2": 512.0, "y2": 402.8},
-      "class_id": 1,
-      "class_name": "weed",
-      "confidence": 0.535
-    },
-    {
-      "bbox": {"x1": 136.4, "y1": 62.4, "x2": 374.2, "y2": 405.4},
-      "class_id": 1,
-      "class_name": "weed",
-      "confidence": 0.254
-    }
-  ],
-  "image_size": [512, 512],
-  "model_name": "modelv0"
-}
-```
-
-#### Example: Health check
-
-```bash
-curl http://localhost:8000/health
-# {"status":"ok","model_loaded":true}
-```
-
-### Docker Containerization
-
-Run the stack with Docker Compose:
-
-```bash
-docker compose up --build
-```
-
-This starts the FastAPI app and an nginx reverse proxy in front of it. The API remains internal to Docker; nginx is the public entry point.
-
-Local access (current default for this environment):
-
-```yaml
-ports:
-  - "8080:80"
-  - "8443:443"
-```
-
-Example checks:
-
-```bash
-curl http://localhost:8080/health
-curl -k https://localhost:8443/health
-```
-
-If you want to use the hostname alias locally, add it once to `/etc/hosts`:
-
-```bash
-127.0.0.1 weed-detector
-```
-
-Then the same routes are available as:
-
-```bash
-curl http://weed-detector:8080/health
-curl -k  https://weed-detector:8443/health
-```
-
-The nginx layer enforces a 10 MB upload cap, rate limiting on `/predict`, and hardened security headers.
+- `--config`: config filename, default `config.yaml`
+- `--config-root`: config directory, default `configs`
+- `--name`: override the experiment or model name
+- `--source`: file or folder path used by `predict`
 
 ## Configuration
 
-Edit `configs/config.yaml` to change hyperparameters:
+The main project config is in `configs/config.yaml`. It contains hyperparameters, dataset settings, model names, and path definitions.
 
 ```yaml
 seed: 99
@@ -257,38 +175,69 @@ paths:
   models_trained_dir: models/trained
 ```
 
-## Logging
+## Prediction API
 
-All modules use structured logging via `weed_detector.utils.logging`. Log level defaults to `INFO`.
+The project includes a FastAPI service for inference.
 
-Example log output:
+Start the API locally:
 
+```bash
+uv run uvicorn weed_detector.api.main:app --host 0.0.0.0 --port 8000
 ```
-2026-10-20 14:42:42 | INFO     | weed_detector.api.main:lifespan:23 | Starting weed detector API service
-2026-10-20 14:42:42 | INFO     | weed_detector.api.service:_load_model:51 | Loading model weights from '.../best.pt'
-2026-10-20 14:42:42 | INFO     | weed_detector.api.service:_load_model:53 | Model loaded successfully
+
+Endpoints include:
+
+- `GET /health`
+- `POST /predict`
+- `GET /metrics`
+- `GET /docs`
+
+Example request:
+
+```bash
+curl -X POST http://localhost:8000/predict \
+  -F "file=@path/to/image.jpg" \
+  -F "conf_threshold=0.25"
 ```
+
+## Docker and local deployment
+
+The project includes Docker and nginx configuration for a local deployment stack:
+
+```bash
+docker compose up --build
+```
+
+This starts the API and the reverse proxy. The default local routes are:
+
+- `http://localhost:8080/health`
+- `https://localhost:8443/health`
 
 ## Dataset
 
-The model is trained on the [Crop and Weed Detection Dataset](https://www.kaggle.com/datasets/ravirajsinh45/crop-and-weed-detection-data-with-bounding-boxes) from Kaggle, which contains JPEG images and YOLO-format `.txt` label files. Classes:
+The training dataset is the Kaggle crop-and-weed detection dataset, with annotations in YOLO text format. The class mapping is:
 
-| Class ID | Name |
-|----------|------|
-| 0 | crop |
-| 1 | weed |
+- `0`: crop
+- `1`: weed
 
-Images are 512×512 pixels.
+## Code quality
 
-## Current State
+Run the project linting and test checks with:
 
-- ✅ Phase 0: Codebase finetuning (logging, `__init__.py` exports, bug fixes) — **completed**
-- ✅ Phase 1: FastAPI prediction service — **completed** (`POST /predict`, `GET /health`, `GET /metrics`)
-- ✅ Phase 2: Docker containerization — **completed**
-- ✅ Phase 3: nginx security layer — **completed**
-- ⬜ Phase 4: Experiment tracking (MLflow) + data versioning (DVC on DagsHub)
-- ⬜ Phase 5: Monitoring (Prometheus + Grafana)
-- ⬜ Phase 6: Vanilla HTML/JS UI
-- ⬜ Phase 7: Full-stack integration & deployment prep
+```bash
+uv run pre-commit run --all-files
+```
+
+If you want the hooks to run automatically on each commit:
+
+```bash
+uv run pre-commit install
+```
+
+## Notes
+
+- Training outputs and large assets are intentionally kept out of Git and handled through DVC.
+- MLflow logs training parameters, metrics, and artifacts to the configured DagsHub experiment.
+- The repo is structured so that the training script stays focused on training orchestration, while DVC and MLflow integration is handled in dedicated utility modules.
 
 

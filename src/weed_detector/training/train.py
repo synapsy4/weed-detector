@@ -2,6 +2,8 @@
 YOLO training function
 """
 
+from __future__ import annotations
+
 from ultralytics.utils.metrics import DetMetrics
 
 from weed_detector.model import load_model
@@ -11,6 +13,7 @@ from weed_detector.utils import (
     get_model_out_dir,
     get_pretrained_weights_path,
     get_weights_path,
+    log_training_run,
 )
 
 logger = get_logger(__name__)
@@ -59,5 +62,7 @@ def train(config: dict) -> DetMetrics | None:
     logger.info("Training started")
     metrics = model.train(**kwargs)
     logger.info("Training completed")
+
+    log_training_run(config=config, model_out_dir=model_out_dir, metrics=metrics)
 
     return metrics
