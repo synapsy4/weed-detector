@@ -1,0 +1,99 @@
+schema: '2.0'
+stages:
+  download:
+    cmd: python scripts/run.py --config config.yaml --config-root configs 
+      download
+    deps:
+    - path: configs/config.yaml
+      hash: md5
+      md5: ecd5713f2d1e108f59dd911e5440dcd3
+      size: 455
+      isexec: true
+    - path: src/weed_detector/data/download.py
+      hash: md5
+      md5: 8ac676d599de51bc0db4438bca2352ce
+      size: 1209
+    outs:
+    - path: data/raw
+      hash: md5
+      md5: b926ef7593061e2e385aee25b49421e2.dir
+      size: 82734691
+      nfiles: 2601
+  preprocess:
+    cmd: python scripts/run.py --config config.yaml --config-root configs 
+      preprocess
+    deps:
+    - path: configs/config.yaml
+      hash: md5
+      md5: ecd5713f2d1e108f59dd911e5440dcd3
+      size: 455
+      isexec: true
+    - path: data/raw
+      hash: md5
+      md5: b926ef7593061e2e385aee25b49421e2.dir
+      size: 82734691
+      nfiles: 2601
+    - path: src/weed_detector/data/preprocess.py
+      hash: md5
+      md5: 27898972c2361cdba97e2e72f665bb6b
+      size: 2580
+      isexec: true
+    outs:
+    - path: configs/yolo.yaml
+      hash: md5
+      md5: 2413758b131fd4572efad8ad0f94124a
+      size: 138
+    - path: data/processed
+      hash: md5
+      md5: c83e7ea882e00015c14e616b0611057e.dir
+      size: 82734681
+      nfiles: 2600
+  train:
+    cmd: python scripts/run.py --config config.yaml --config-root configs train
+    deps:
+    - path: configs/config.yaml
+      hash: md5
+      md5: ecd5713f2d1e108f59dd911e5440dcd3
+      size: 455
+      isexec: true
+    - path: configs/yolo.yaml
+      hash: md5
+      md5: 2413758b131fd4572efad8ad0f94124a
+      size: 138
+    - path: data/processed
+      hash: md5
+      md5: 9dec5d94f1f43a1074a00be3ab7a9005.dir
+      size: 82970018
+      nfiles: 2602
+    - path: src/weed_detector/training/train.py
+      hash: md5
+      md5: 6bb938a4197103ad1705086896b20124
+      size: 1883
+    outs:
+    - path: models/trained/modelv0/train
+      hash: md5
+      md5: 48b747c6f0e07be81126eb59c617686e.dir
+      size: 13902434
+      nfiles: 21
+  evaluate:
+    cmd: python scripts/run.py --config config.yaml --config-root configs eval
+    deps:
+    - path: configs/config.yaml
+      hash: md5
+      md5: ecd5713f2d1e108f59dd911e5440dcd3
+      size: 455
+      isexec: true
+    - path: models/trained/modelv0/train
+      hash: md5
+      md5: 48b747c6f0e07be81126eb59c617686e.dir
+      size: 13902434
+      nfiles: 21
+    - path: src/weed_detector/training/evaluate.py
+      hash: md5
+      md5: 0e393a30daad3f0321e3c298c5b9a373
+      size: 1704
+    outs:
+    - path: models/trained/modelv0/eval/metrics.json
+      hash: md5
+      md5: a9915fb2f3c1b787b1e3efbf68721cb0
+      size: 211

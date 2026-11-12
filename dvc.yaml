@@ -1,6 +1,6 @@
 stages:
   download:
-    cmd: python scripts/run.py download --config config.yaml --config-root configs
+    cmd: python scripts/run.py --config config.yaml --config-root configs download
     deps:
       - configs/config.yaml
       - src/weed_detector/data/download.py
@@ -8,7 +8,7 @@ stages:
       - data/raw
 
   preprocess:
-    cmd: python scripts/run.py preprocess --config config.yaml --config-root configs
+    cmd: python scripts/run.py --config config.yaml --config-root configs preprocess
     deps:
       - configs/config.yaml
       - data/raw
@@ -18,25 +18,20 @@ stages:
       - configs/yolo.yaml
 
   train:
-    cmd: python scripts/run.py train --config config.yaml --config-root configs
+    cmd: python scripts/run.py --config config.yaml --config-root configs train
     deps:
       - configs/config.yaml
       - configs/yolo.yaml
       - data/processed
       - src/weed_detector/training/train.py
-    params:
-      - configs/config.yaml:seed
-      - configs/config.yaml:data
-      - configs/config.yaml:model
-      - configs/config.yaml:train
     outs:
-      - models/trained
+      - models/trained/modelv0/train
 
   evaluate:
-    cmd: python scripts/run.py eval --config config.yaml --config-root configs
+    cmd: python scripts/run.py --config config.yaml --config-root configs eval
     deps:
       - configs/config.yaml
-      - models/trained
+      - models/trained/modelv0/train
       - src/weed_detector/training/evaluate.py
     metrics:
-      - models/trained
+      - models/trained/modelv0/eval/metrics.json

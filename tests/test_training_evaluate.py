@@ -2,6 +2,7 @@
 Unit tests for the evaluation module.
 """
 
+import json
 from unittest.mock import MagicMock, patch
 
 from weed_detector.training.evaluate import eval as evaluate
@@ -31,3 +32,29 @@ def test_eval_calls_model_val_with_test_split():
     assert call_kwargs["split"] == "test"
     assert call_kwargs["save_dir"] == "/tmp/models/test_model/eval"
     assert call_kwargs["device"] == "cpu"
+
+
+def test_eval_writes_metrics_json_to_eval_dir(tmp_path):
+    """Evaluation should write a DVC-safe metrics.json file outside the training output tree."""
+    metrics_path = tmp_path / "models" / "test_model" / "eval" / "metrics.json"
+    config = {
+        "paths": {
+            "yolo_yaml_path": "/tmp/yolo.yaml",
+            "models_trained_dir": str(tmp_path / "models"),
+        },
+        "model": {"model_name": "test_model"},
+    }
+
+    mock_model = MagicMock()
+    mock_metrics = MagicMock()
+    mock_metrics.results_dict = {"metrics/precision(B)": 0.42, "fitness": 0.81}
+    mock_model.val.return_value = mock_metrics
+
+    with patch("weed_detector.training.evaluate.get_device", return_value="cpu"):
+        evaluate(model=mock_model, config=config)
+
+    assert metrics_path.exists()
+    assert json.loads(metrics_path.read_text()) == {
+        "metrics_precision_B": 0.42,
+        "fitness": 0.81,
+    }
