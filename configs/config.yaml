@@ -21,11 +21,8 @@ paths:
   yolo_yaml_path: configs/yolo.yaml
   models_pretrained_dir: models/pretrained
   models_trained_dir: models/trained
-
-
-
-
-
-
-
-  
+registry:
+  model_name: weed-detector
+  metric: weed_recall
+  min_threshold: 0.3
+  min_improvement: 0.01

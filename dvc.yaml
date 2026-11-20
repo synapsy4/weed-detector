@@ -40,3 +40,10 @@ stages:
       - src/weed_detector/training/evaluate.py
     metrics:
       - models/trained/${model.model_name}/eval/metrics.json
+
+  promote:
+    cmd: python scripts/run.py --config config.yaml --config-root configs promote
+    deps:
+      - configs/config.yaml
+      - models/trained/${model.model_name}/eval/metrics.json
+      - src/weed_detector/training/promote.py

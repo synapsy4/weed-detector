@@ -68,6 +68,29 @@ def _per_class_metrics(metrics: DetMetrics) -> dict[str, float]:
     return result
 
 
+def run_validation(
+    model: YOLO, config: dict, save_dir: Path | str
+) -> tuple[DetMetrics, dict[str, float]]:
+    """
+    Evaluate a model on the test split without writing metrics or logging.
+
+    Returns the raw Ultralytics metrics and the flat metrics dict (overall and
+    per class). Also used to re-evaluate registered models on the current test set.
+    """
+    logger.info("Starting evaluation on test split")
+
+    metrics = model.val(
+        data=config["paths"]["yolo_yaml_path"],
+        split="test",
+        save_dir=str(save_dir),
+        device=get_device(),
+    )
+
+    payload = _serialize_metrics(metrics)
+    payload.update(_per_class_metrics(metrics))
+    return metrics, payload
+
+
 def eval(model: YOLO, config: dict) -> DetMetrics:
     """
     Call preimplemented YOLO val function.
@@ -77,20 +100,8 @@ def eval(model: YOLO, config: dict) -> DetMetrics:
     metrics_path = model_out_dir / "metrics.json"
     metrics_path.parent.mkdir(parents=True, exist_ok=True)
 
-    device = get_device()
-
-    logger.info("Starting evaluation on test split")
-
     # Run validation on test set
-    metrics = model.val(
-        data=config["paths"]["yolo_yaml_path"],
-        split="test",
-        save_dir=str(model_out_dir),
-        device=device,
-    )
-
-    payload = _serialize_metrics(metrics)
-    payload.update(_per_class_metrics(metrics))
+    metrics, payload = run_validation(model, config, save_dir=model_out_dir)
     metrics_path.write_text(json.dumps(payload, indent=2), encoding="utf-8")
 
     # Attach test metrics to the MLflow run that trained this model

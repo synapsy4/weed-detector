@@ -5,12 +5,16 @@ from __future__ import annotations
 import importlib
 import math
 import re
+import subprocess
 from datetime import UTC, datetime
 from pathlib import Path
 from urllib.parse import urlparse
 
 import mlflow
 import yaml
+from mlflow import MlflowClient
+from mlflow.entities.model_registry import ModelVersion
+from mlflow.exceptions import MlflowException
 
 from weed_detector.utils.env import (
     PROJECT_ROOT,
@@ -24,6 +28,9 @@ from weed_detector.utils.logging import get_logger
 logger = get_logger(__name__)
 
 RUN_ID_FILENAME = "mlflow_run_id.txt"
+PRODUCTION_ALIAS = "production"
+FALLBACK_ALIAS = "fallback"
+WEIGHTS_ARTIFACT = "weights/best.pt"
 DATA_STAGE = "preprocess"
 DATA_OUT_PATH = "data/processed"
 
@@ -209,3 +216,85 @@ def log_eval_metrics(run_id: str, eval_metrics: dict[str, float]) -> bool:
         )
         return False
     return True
+
+
+# ---------------------------------------------------------------------------
+# Model registry
+# ---------------------------------------------------------------------------
+
+
+def get_git_commit() -> str | None:
+    """Return the current git commit hash, or None outside a git checkout."""
+    try:
+        result = subprocess.run(
+            ["git", "rev-parse", "HEAD"],
+            cwd=PROJECT_ROOT,
+            capture_output=True,
+            text=True,
+            timeout=10,
+            check=True,
+        )
+    except (OSError, subprocess.SubprocessError):
+        return None
+    return result.stdout.strip() or None
+
+
+def get_registry_client() -> MlflowClient:
+    """Set up DagsHub/MLflow tracking and return a client for the model registry."""
+    load_project_env()
+    init_dagshub_tracking()
+    tracking_uri = get_mlflow_tracking_uri()
+    mlflow.set_tracking_uri(tracking_uri)
+    return MlflowClient(tracking_uri=tracking_uri, registry_uri=tracking_uri)
+
+
+def get_model_version_by_alias(
+    client: MlflowClient, model_name: str, alias: str
+) -> ModelVersion | None:
+    """Return the model version an alias points to, or None if it is not set."""
+    try:
+        return client.get_model_version_by_alias(model_name, alias)
+    except MlflowException as e:
+        if getattr(e, "error_code", "") == "RESOURCE_DOES_NOT_EXIST":
+            return None
+        raise
+
+
+def register_model_version(
+    run_id: str, model_name: str, tags: dict[str, str]
+) -> ModelVersion:
+    """Register the best.pt artifact of a training run as a new model version."""
+    return mlflow.register_model(
+        model_uri=f"runs:/{run_id}/{WEIGHTS_ARTIFACT}",
+        name=model_name,
+        tags=tags,
+    )
+
+
+def set_model_alias(
+    client: MlflowClient, model_name: str, alias: str, version: str
+) -> None:
+    """Point an alias at a model version (moves it if it was set elsewhere)."""
+    client.set_registered_model_alias(model_name, alias, str(version))
+    logger.info(
+        "Alias '%s' of '%s' now points to version %s", alias, model_name, version
+    )
+
+
+def download_model_weights(
+    client: MlflowClient, model_name: str, version: str, dst_dir: Path
+) -> Path:
+    """Download the weights file of a registered model version into dst_dir."""
+    uri = client.get_model_version_download_uri(model_name, str(version))
+    local = Path(
+        mlflow.artifacts.download_artifacts(artifact_uri=uri, dst_path=str(dst_dir))
+    )
+    if local.is_file():
+        return local
+
+    candidates = sorted(local.rglob("*.pt"))
+    if not candidates:
+        raise FileNotFoundError(
+            f"No .pt weights found in model version artifact '{uri}'"
+        )
+    return next((c for c in candidates if c.name == "best.pt"), candidates[0])

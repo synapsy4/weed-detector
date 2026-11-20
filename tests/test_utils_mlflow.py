@@ -541,3 +541,55 @@ def test_log_eval_metrics_prefixes_metrics_and_reuses_run(monkeypatch):
     assert calls["run_id"] == "run-1"
     assert calls["metrics"] == {"test_weed_recall": 0.6}
     assert calls["tag"] == ("eval_data_version", "hash.dir")
+
+
+def test_get_model_version_by_alias_returns_none_when_alias_missing():
+    """A missing alias is a normal state, other registry errors must propagate."""
+    import pytest
+    from mlflow.exceptions import MlflowException
+    from mlflow.protos.databricks_pb2 import INTERNAL_ERROR, RESOURCE_DOES_NOT_EXIST
+
+    from weed_detector.utils.mlflow import get_model_version_by_alias
+
+    class Client:
+        def __init__(self, error_code):
+            self.error_code = error_code
+
+        def get_model_version_by_alias(self, name, alias):
+            raise MlflowException("boom", error_code=self.error_code)
+
+    assert (
+        get_model_version_by_alias(Client(RESOURCE_DOES_NOT_EXIST), "m", "production")
+        is None
+    )
+    with pytest.raises(MlflowException):
+        get_model_version_by_alias(Client(INTERNAL_ERROR), "m", "production")
+
+
+def test_download_model_weights_returns_file_or_best_pt_in_directory(
+    monkeypatch, tmp_path
+):
+    """Single-file artifacts are returned as is; directories are searched for best.pt."""
+    from weed_detector.utils.mlflow import download_model_weights
+
+    class Client:
+        def get_model_version_download_uri(self, name, version):
+            return f"runs:/abc/weights/{version}"
+
+    single = tmp_path / "best.pt"
+    single.write_bytes(b"x")
+    monkeypatch.setattr(
+        "weed_detector.utils.mlflow.mlflow.artifacts.download_artifacts",
+        lambda artifact_uri, dst_path: str(single),
+    )
+    assert download_model_weights(Client(), "m", "1", tmp_path) == single
+
+    folder = tmp_path / "weights"
+    folder.mkdir()
+    (folder / "last.pt").write_bytes(b"x")
+    (folder / "best.pt").write_bytes(b"x")
+    monkeypatch.setattr(
+        "weed_detector.utils.mlflow.mlflow.artifacts.download_artifacts",
+        lambda artifact_uri, dst_path: str(folder),
+    )
+    assert download_model_weights(Client(), "m", "1", tmp_path) == folder / "best.pt"

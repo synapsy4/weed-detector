@@ -7,7 +7,8 @@ from weed_detector.config import load_config
 from weed_detector.data import create_data_splits, download_dataset
 from weed_detector.inference import predict
 from weed_detector.model import load_model
-from weed_detector.training import evaluate, train
+from weed_detector.training import evaluate, promote, rollback, train
+from weed_detector.training.promote import PromotionError
 from weed_detector.utils import (
     get_logger,
     get_weights_path,
@@ -52,7 +53,15 @@ def build_parser() -> argparse.ArgumentParser:
     )
 
     subparsers = parser.add_subparsers(dest="command", required=True)
-    for cmd in ["download", "preprocess", "train", "eval", "predict"]:
+    for cmd in [
+        "download",
+        "preprocess",
+        "train",
+        "eval",
+        "promote",
+        "rollback",
+        "predict",
+    ]:
         subparsers.add_parser(cmd, help=f"Run the {cmd} task")
 
     return parser
@@ -114,6 +123,32 @@ def eval_command(args: argparse.Namespace) -> None:
     evaluate(model=model, config=config)
 
 
+def promote_command(args: argparse.Namespace) -> None:
+    """Register the trained model and promote it if it passes the gate."""
+    config = _load_config(args)
+    _apply_name_override(config, args)
+    logger.info(f"Running promote for config '{args.config}'")
+    try:
+        result = promote(config=config)
+    except PromotionError as e:
+        logger.error(f"Promotion failed: {e}")
+        raise SystemExit(1) from e
+    # A rejected candidate is a valid outcome, not an error
+    logger.info(f"Promotion result: {result.decision} ({result.reason})")
+
+
+def rollback_command(args: argparse.Namespace) -> None:
+    """Swap the production and fallback model versions."""
+    config = _load_config(args)
+    logger.info(f"Running rollback for config '{args.config}'")
+    try:
+        result = rollback(config=config)
+    except PromotionError as e:
+        logger.error(f"Rollback failed: {e}")
+        raise SystemExit(1) from e
+    logger.info(f"Rollback result: {result.reason}")
+
+
 def predict_command(args: argparse.Namespace) -> None:
     """Run inference on a source image or directory."""
     config = _load_config(args)
@@ -145,6 +180,12 @@ def main(argv: list[str] | None = None) -> None:
         return
     if args.command == "eval":
         eval_command(args)
+        return
+    if args.command == "promote":
+        promote_command(args)
+        return
+    if args.command == "rollback":
+        rollback_command(args)
         return
     if args.command == "predict":
         predict_command(args)
