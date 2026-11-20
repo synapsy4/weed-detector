@@ -211,7 +211,7 @@ def promote(config: dict, client: MlflowClient | None = None) -> PromotionResult
         return result
 
     new_version = register_model_version(
-        run_id, model_name, _version_tags(config, run_id, metric, payload)
+        client, run_id, model_name, _version_tags(config, run_id, metric, payload)
     )
     # Order matters: the old production model becomes the fallback first, so
     # there is never a moment without a valid production alias.

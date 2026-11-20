@@ -95,7 +95,7 @@ def set_candidate_recall(config, value):
 
 
 def fake_register(registry):
-    def _register(run_id, model_name, tags):
+    def _register(client, run_id, model_name, tags):
         return registry.add_version(len(registry.versions) + 1, run_id)
 
     return _register

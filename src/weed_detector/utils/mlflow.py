@@ -267,6 +267,11 @@ def get_registry_client(interactive: bool = True) -> MlflowClient:
     return MlflowClient(tracking_uri=tracking_uri, registry_uri=tracking_uri)
 
 
+# Error codes meaning "this alias/model does not exist". The reference MLflow server
+# answers RESOURCE_DOES_NOT_EXIST, DagsHub answers INVALID_PARAMETER_VALUE.
+_MISSING_ALIAS_ERROR_CODES = {"RESOURCE_DOES_NOT_EXIST", "INVALID_PARAMETER_VALUE"}
+
+
 def get_model_version_by_alias(
     client: MlflowClient, model_name: str, alias: str
 ) -> ModelVersion | None:
@@ -274,18 +279,31 @@ def get_model_version_by_alias(
     try:
         return client.get_model_version_by_alias(model_name, alias)
     except MlflowException as e:
-        if getattr(e, "error_code", "") == "RESOURCE_DOES_NOT_EXIST":
+        if getattr(e, "error_code", "") in _MISSING_ALIAS_ERROR_CODES:
             return None
         raise
 
 
 def register_model_version(
-    run_id: str, model_name: str, tags: dict[str, str]
+    client: MlflowClient, run_id: str, model_name: str, tags: dict[str, str]
 ) -> ModelVersion:
-    """Register the best.pt artifact of a training run as a new model version."""
-    return mlflow.register_model(
-        model_uri=f"runs:/{run_id}/{WEIGHTS_ARTIFACT}",
+    """
+    Register the best.pt artifact of a training run as a new model version.
+
+    Uses the client API instead of mlflow.register_model, which on MLflow 3 only
+    accepts logged models, not plain artifacts.
+    """
+    try:
+        client.create_registered_model(model_name)
+        logger.info("Created registered model '%s'", model_name)
+    except MlflowException as e:
+        if getattr(e, "error_code", "") != "RESOURCE_ALREADY_EXISTS":
+            raise
+
+    return client.create_model_version(
         name=model_name,
+        source=f"runs:/{run_id}/{WEIGHTS_ARTIFACT}",
+        run_id=run_id,
         tags=tags,
     )
 

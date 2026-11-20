@@ -547,7 +547,11 @@ def test_get_model_version_by_alias_returns_none_when_alias_missing():
     """A missing alias is a normal state, other registry errors must propagate."""
     import pytest
     from mlflow.exceptions import MlflowException
-    from mlflow.protos.databricks_pb2 import INTERNAL_ERROR, RESOURCE_DOES_NOT_EXIST
+    from mlflow.protos.databricks_pb2 import (
+        INTERNAL_ERROR,
+        INVALID_PARAMETER_VALUE,
+        RESOURCE_DOES_NOT_EXIST,
+    )
 
     from weed_detector.utils.mlflow import get_model_version_by_alias
 
@@ -560,6 +564,11 @@ def test_get_model_version_by_alias_returns_none_when_alias_missing():
 
     assert (
         get_model_version_by_alias(Client(RESOURCE_DOES_NOT_EXIST), "m", "production")
+        is None
+    )
+    # DagsHub reports an unset alias as INVALID_PARAMETER_VALUE
+    assert (
+        get_model_version_by_alias(Client(INVALID_PARAMETER_VALUE), "m", "production")
         is None
     )
     with pytest.raises(MlflowException):
@@ -593,3 +602,41 @@ def test_download_model_weights_returns_file_or_best_pt_in_directory(
         lambda artifact_uri, dst_path: str(folder),
     )
     assert download_model_weights(Client(), "m", "1", tmp_path) == folder / "best.pt"
+
+
+def test_register_model_version_creates_model_once_and_uses_artifact_source():
+    """Registration goes through the client API and tolerates an existing model."""
+    from types import SimpleNamespace
+
+    import pytest
+    from mlflow.exceptions import MlflowException
+    from mlflow.protos.databricks_pb2 import INTERNAL_ERROR, RESOURCE_ALREADY_EXISTS
+
+    from weed_detector.utils.mlflow import register_model_version
+
+    class Client:
+        def __init__(self, create_error=None):
+            self.create_error = create_error
+            self.created = []
+
+        def create_registered_model(self, name):
+            if self.create_error:
+                raise MlflowException("x", error_code=self.create_error)
+
+        def create_model_version(self, name, source, run_id, tags):
+            self.created.append((name, source, run_id, tags))
+            return SimpleNamespace(version="1")
+
+    client = Client()
+    register_model_version(client, "run-1", "weed-detector", {"imgsz": "64"})
+    assert client.created == [
+        ("weed-detector", "runs:/run-1/weights/best.pt", "run-1", {"imgsz": "64"})
+    ]
+
+    # Model already registered: just add a version
+    client = Client(RESOURCE_ALREADY_EXISTS)
+    register_model_version(client, "run-2", "weed-detector", {})
+    assert len(client.created) == 1
+
+    with pytest.raises(MlflowException):
+        register_model_version(Client(INTERNAL_ERROR), "run-3", "weed-detector", {})
