@@ -71,3 +71,47 @@ def test_load_config_returns_dict(tmp_path):
     assert config["seed"] == 99
     assert config["model"]["model_name"] == "modelv2"
     assert config["train"]["epochs"] == 2
+
+
+def _write_config(tmp_path):
+    config_content = {
+        "seed": 99,
+        "train": {"epochs": 2, "resume_blocking": False},
+        "paths": {"raw_dir": "data/raw"},
+    }
+    config_file = tmp_path / "config.yaml"
+    config_file.write_text(yaml.safe_dump(config_content))
+    return config_file
+
+
+def test_load_config_applies_overrides_with_yaml_types(tmp_path):
+    """Overrides should be parsed as YAML so numbers and booleans keep their type."""
+    config = load_config(
+        path=_write_config(tmp_path),
+        root=tmp_path,
+        overrides=["train.epochs=50", "train.resume_blocking=true", "seed=7"],
+    )
+
+    assert config["train"]["epochs"] == 50
+    assert config["train"]["resume_blocking"] is True
+    assert config["seed"] == 7
+
+
+def test_load_config_overrides_paths_before_absolutizing(tmp_path):
+    """Path overrides should end up absolute like every other path."""
+    config = load_config(
+        path=_write_config(tmp_path),
+        root=tmp_path,
+        overrides=["paths.raw_dir=other/raw"],
+    )
+
+    assert config["paths"]["raw_dir"] == str((tmp_path / "other" / "raw").resolve())
+
+
+def test_load_config_rejects_unknown_override_key(tmp_path):
+    """Typos in override keys must fail loudly instead of being ignored."""
+    import pytest
+
+    for bad in ("train.epochz=5", "nope.epochs=5", "train.epochs"):
+        with pytest.raises(ValueError):
+            load_config(path=_write_config(tmp_path), root=tmp_path, overrides=[bad])

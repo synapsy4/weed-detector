@@ -1,3 +1,6 @@
+vars:
+  - configs/config.yaml
+
 stages:
   download:
     cmd: python scripts/run.py --config config.yaml --config-root configs download
@@ -25,13 +28,15 @@ stages:
       - data/processed
       - src/weed_detector/training/train.py
     outs:
-      - models/trained/modelv0/train
+      # persist keeps last.pt between runs so training can be continued
+      - models/trained/${model.model_name}/train:
+          persist: true
 
   evaluate:
     cmd: python scripts/run.py --config config.yaml --config-root configs eval
     deps:
       - configs/config.yaml
-      - models/trained/modelv0/train
+      - models/trained/${model.model_name}/train
       - src/weed_detector/training/evaluate.py
     metrics:
-      - models/trained/modelv0/eval/metrics.json
+      - models/trained/${model.model_name}/eval/metrics.json

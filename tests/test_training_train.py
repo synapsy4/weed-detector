@@ -117,3 +117,38 @@ def test_train_new_run_loads_pretrained_weights(tmp_path):
     mock_model.train.assert_called_once()
     call_kwargs = mock_model.train.call_args.kwargs
     assert call_kwargs["resume"] is False
+
+
+def test_train_stores_run_id_and_links_previous_run(tmp_path):
+    """A warm start tags the new run with the previous one and stores the new id."""
+    config = _continue_config(tmp_path)
+    _write_last_pt(tmp_path)
+    out_dir = tmp_path / "test_model" / "train"
+    (out_dir / "mlflow_run_id.txt").write_text("run-old")
+
+    with (
+        patch("weed_detector.training.train.load_model", return_value=MagicMock()),
+        patch(
+            "weed_detector.training.train.log_training_run", return_value="run-new"
+        ) as mock_log,
+    ):
+        train(config=config)
+
+    assert mock_log.call_args.kwargs["continued_from"] == "run-old"
+    assert (out_dir / "mlflow_run_id.txt").read_text() == "run-new"
+
+
+def test_train_removes_stale_run_id_when_logging_fails(tmp_path):
+    """If MLflow logging fails, eval must not log to an outdated run."""
+    config = _continue_config(tmp_path)
+    _write_last_pt(tmp_path)
+    out_dir = tmp_path / "test_model" / "train"
+    (out_dir / "mlflow_run_id.txt").write_text("run-old")
+
+    with (
+        patch("weed_detector.training.train.load_model", return_value=MagicMock()),
+        patch("weed_detector.training.train.log_training_run", return_value=None),
+    ):
+        train(config=config)
+
+    assert not (out_dir / "mlflow_run_id.txt").exists()

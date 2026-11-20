@@ -12,7 +12,12 @@ from weed_detector.utils.env import (
 )
 from weed_detector.utils.labels import get_idx_to_class, get_lbl_arrays
 from weed_detector.utils.logging import get_logger, setup_logger
-from weed_detector.utils.mlflow import log_training_run
+from weed_detector.utils.mlflow import (
+    load_run_id,
+    log_eval_metrics,
+    log_training_run,
+    save_run_id,
+)
 from weed_detector.utils.paths import (
     get_model_out_dir,
     get_pretrained_weights_path,
@@ -34,7 +39,10 @@ __all__ = [
     "get_pretrained_weights_path",
     "get_weights_path",
     "load_project_env",
+    "load_run_id",
+    "log_eval_metrics",
     "log_training_run",
+    "save_run_id",
     "setup_logger",
     "write_yolo_yaml",
 ]

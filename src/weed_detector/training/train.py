@@ -16,7 +16,9 @@ from weed_detector.utils import (
     get_model_out_dir,
     get_pretrained_weights_path,
     get_weights_path,
+    load_run_id,
     log_training_run,
+    save_run_id,
 )
 
 logger = get_logger(__name__)
@@ -50,6 +52,7 @@ def train(config: dict) -> DetMetrics | None:
 
     # Check for already trained weights
     weights_path = get_weights_path(config=config, cp="last")
+    previous_run_id: str | None = None
 
     if weights_path.exists():
         # If existing model found, resume training or abort
@@ -67,6 +70,7 @@ def train(config: dict) -> DetMetrics | None:
             "(fresh optimizer)"
         )
         _archive_results_csv(model_out_dir)
+        previous_run_id = load_run_id(model_out_dir)
 
         kwargs = build_train_kwargs(
             config=config, model_out_dir=model_out_dir, resume=False
@@ -92,6 +96,13 @@ def train(config: dict) -> DetMetrics | None:
     metrics = model.train(**kwargs)
     logger.info("Training completed")
 
-    log_training_run(config=config, model_out_dir=model_out_dir, metrics=metrics)
+    run_id = log_training_run(
+        config=config,
+        model_out_dir=model_out_dir,
+        metrics=metrics,
+        continued_from=previous_run_id,
+    )
+    # Remember the run so eval can log to it (removes a stale id if logging failed)
+    save_run_id(model_out_dir, run_id)
 
     return metrics

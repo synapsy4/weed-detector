@@ -406,3 +406,138 @@ def test_log_training_run_handles_missing_config_gracefully(monkeypatch):
         )
     except RuntimeError as exc:  # pragma: no cover - safety check
         raise AssertionError(f"log_training_run should swallow MLflow errors: {exc}")
+
+
+def test_run_id_roundtrip_and_removal(tmp_path):
+    """The run id is stored next to the model and removed when logging failed."""
+    from weed_detector.utils.mlflow import load_run_id, save_run_id
+
+    assert load_run_id(tmp_path) is None
+
+    save_run_id(tmp_path, "run-1")
+    assert load_run_id(tmp_path) == "run-1"
+
+    save_run_id(tmp_path, None)
+    assert load_run_id(tmp_path) is None
+
+
+def test_get_data_version_reads_processed_data_hash(tmp_path):
+    """The DVC hash of data/processed is read from dvc.lock."""
+    from weed_detector.utils.mlflow import get_data_version
+
+    lock = tmp_path / "dvc.lock"
+    lock.write_text(
+        "stages:\n"
+        "  preprocess:\n"
+        "    outs:\n"
+        "    - path: data/processed\n"
+        "      md5: abc123.dir\n"
+        "    - path: configs/yolo.yaml\n"
+        "      md5: other\n"
+    )
+
+    assert get_data_version(lock) == "abc123.dir"
+    assert get_data_version(tmp_path / "missing.lock") is None
+
+
+def test_log_training_run_returns_run_id_and_tags_continuation(monkeypatch, tmp_path):
+    """The run id is returned and a warm start is linked to the previous run."""
+    calls = {}
+
+    class DummyRun:
+        class Info:
+            run_id = "run-new"
+
+        info = Info()
+
+        def __enter__(self):
+            return self
+
+        def __exit__(self, exc_type, exc, tb):
+            return False
+
+    monkeypatch.setattr(
+        "weed_detector.utils.mlflow.init_dagshub_tracking", lambda: None
+    )
+    monkeypatch.setattr(
+        "weed_detector.utils.mlflow.get_data_version", lambda: "hash.dir"
+    )
+    monkeypatch.setattr(
+        "weed_detector.utils.mlflow.mlflow.set_tracking_uri", lambda u: None
+    )
+    monkeypatch.setattr(
+        "weed_detector.utils.mlflow.mlflow.set_experiment", lambda n: None
+    )
+    monkeypatch.setattr(
+        "weed_detector.utils.mlflow.mlflow.start_run", lambda run_name: DummyRun()
+    )
+    monkeypatch.setattr(
+        "weed_detector.utils.mlflow.mlflow.set_tags",
+        lambda tags: calls.setdefault("tags", tags),
+    )
+    monkeypatch.setattr("weed_detector.utils.mlflow.mlflow.log_params", lambda p: None)
+    monkeypatch.setattr("weed_detector.utils.mlflow.mlflow.log_metrics", lambda m: None)
+
+    config = {
+        "seed": 1,
+        "model": {"model_name": "m", "imgsz": 64},
+        "train": {"epochs": 1, "batch_size": 1, "resume_blocking": False},
+    }
+    run_id = log_training_run(
+        config=config, model_out_dir=tmp_path, metrics=None, continued_from="run-old"
+    )
+
+    assert run_id == "run-new"
+    assert calls["tags"]["continued_from"] == "run-old"
+    assert calls["tags"]["data_version"] == "hash.dir"
+
+
+def test_log_training_run_returns_none_on_failure(monkeypatch, tmp_path):
+    """A failing MLflow backend must not break training and yields no run id."""
+    monkeypatch.setattr(
+        "weed_detector.utils.mlflow.init_dagshub_tracking",
+        lambda: (_ for _ in ()).throw(RuntimeError("boom")),
+    )
+
+    assert log_training_run(config={}, model_out_dir=tmp_path, metrics=None) is None
+
+
+def test_log_eval_metrics_prefixes_metrics_and_reuses_run(monkeypatch):
+    """Eval metrics are logged to the existing run with a 'test_' prefix."""
+    from weed_detector.utils.mlflow import log_eval_metrics
+
+    calls = {}
+
+    class DummyRun:
+        def __enter__(self):
+            return self
+
+        def __exit__(self, exc_type, exc, tb):
+            return False
+
+    monkeypatch.setattr(
+        "weed_detector.utils.mlflow.init_dagshub_tracking", lambda: None
+    )
+    monkeypatch.setattr(
+        "weed_detector.utils.mlflow.get_data_version", lambda: "hash.dir"
+    )
+    monkeypatch.setattr(
+        "weed_detector.utils.mlflow.mlflow.set_tracking_uri", lambda u: None
+    )
+    monkeypatch.setattr(
+        "weed_detector.utils.mlflow.mlflow.start_run",
+        lambda run_id: calls.setdefault("run_id", run_id) and DummyRun(),
+    )
+    monkeypatch.setattr(
+        "weed_detector.utils.mlflow.mlflow.log_metrics",
+        lambda m: calls.setdefault("metrics", m),
+    )
+    monkeypatch.setattr(
+        "weed_detector.utils.mlflow.mlflow.set_tag",
+        lambda k, v: calls.setdefault("tag", (k, v)),
+    )
+
+    assert log_eval_metrics("run-1", {"weed_recall": 0.6}) is True
+    assert calls["run_id"] == "run-1"
+    assert calls["metrics"] == {"test_weed_recall": 0.6}
+    assert calls["tag"] == ("eval_data_version", "hash.dir")

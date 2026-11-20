@@ -10,8 +10,10 @@ from pathlib import Path
 from urllib.parse import urlparse
 
 import mlflow
+import yaml
 
 from weed_detector.utils.env import (
+    PROJECT_ROOT,
     get_dagshub_repo_url,
     get_mlflow_experiment_name,
     get_mlflow_tracking_uri,
@@ -20,6 +22,10 @@ from weed_detector.utils.env import (
 from weed_detector.utils.logging import get_logger
 
 logger = get_logger(__name__)
+
+RUN_ID_FILENAME = "mlflow_run_id.txt"
+DATA_STAGE = "preprocess"
+DATA_OUT_PATH = "data/processed"
 
 
 def _sanitize_mlflow_metrics(results_dict: dict) -> dict[str, float]:
@@ -74,8 +80,52 @@ def init_dagshub_tracking() -> bool:
     return True
 
 
-def log_training_run(config: dict, model_out_dir: Path, metrics: object | None) -> None:
-    """Log a training run to the configured MLflow tracking backend."""
+def get_data_version(lock_path: Path | None = None) -> str | None:
+    """Return the DVC hash of the processed dataset from dvc.lock, if available."""
+    lock_path = lock_path or PROJECT_ROOT / "dvc.lock"
+    try:
+        lock = yaml.safe_load(lock_path.read_text(encoding="utf-8"))
+        outs = lock["stages"][DATA_STAGE]["outs"]
+    except (OSError, yaml.YAMLError, KeyError, TypeError):
+        logger.debug("No DVC data version found in '%s'", lock_path)
+        return None
+
+    for out in outs:
+        if out.get("path") == DATA_OUT_PATH:
+            return out.get("md5")
+    return None
+
+
+def save_run_id(model_out_dir: Path, run_id: str | None) -> None:
+    """Persist the MLflow run id next to the trained model (or remove a stale one)."""
+    run_id_path = Path(model_out_dir) / RUN_ID_FILENAME
+    if run_id is None:
+        run_id_path.unlink(missing_ok=True)
+        return
+    run_id_path.parent.mkdir(parents=True, exist_ok=True)
+    run_id_path.write_text(run_id, encoding="utf-8")
+
+
+def load_run_id(model_out_dir: Path) -> str | None:
+    """Return the MLflow run id stored next to the trained model, if any."""
+    run_id_path = Path(model_out_dir) / RUN_ID_FILENAME
+    if not run_id_path.exists():
+        return None
+    return run_id_path.read_text(encoding="utf-8").strip() or None
+
+
+def log_training_run(
+    config: dict,
+    model_out_dir: Path,
+    metrics: object | None,
+    continued_from: str | None = None,
+) -> str | None:
+    """
+    Log a training run to the configured MLflow tracking backend.
+
+    Returns the MLflow run id, or None if logging failed. ``continued_from`` is the
+    run id of the previous training run when a finished model is trained further.
+    """
     try:
         load_project_env()
         init_dagshub_tracking()
@@ -85,14 +135,18 @@ def log_training_run(config: dict, model_out_dir: Path, metrics: object | None) 
         with mlflow.start_run(
             run_name=f"{config['model']['model_name']}-{datetime.now(UTC).strftime('%Y%m%d-%H%M%S')}"
         ) as run:
-            mlflow.set_tags(
-                {
-                    "project": "weed-detector",
-                    "framework": "ultralytics-yolov8",
-                    "model_name": config["model"]["model_name"],
-                    "dagshub_repo": get_dagshub_repo_url(),
-                }
-            )
+            tags = {
+                "project": "weed-detector",
+                "framework": "ultralytics-yolov8",
+                "model_name": config["model"]["model_name"],
+                "dagshub_repo": get_dagshub_repo_url(),
+            }
+            data_version = get_data_version()
+            if data_version:
+                tags["data_version"] = data_version
+            if continued_from:
+                tags["continued_from"] = continued_from
+            mlflow.set_tags(tags)
 
             params = {
                 "seed": config.get("seed"),
@@ -121,9 +175,37 @@ def log_training_run(config: dict, model_out_dir: Path, metrics: object | None) 
                 run.info.run_id,
                 get_mlflow_tracking_uri(),
             )
+            return str(run.info.run_id)
     except Exception:
         logger.warning(
             "MLflow logging failed; continuing without tracking. "
             "Set MLFLOW_TRACKING_URI and DAGSHUB_TOKEN to enable DagsHub experiment tracking.",
             exc_info=True,
         )
+    return None
+
+
+def log_eval_metrics(run_id: str, eval_metrics: dict[str, float]) -> bool:
+    """Log test-split evaluation metrics (prefixed ``test_``) to an existing run."""
+    try:
+        load_project_env()
+        init_dagshub_tracking()
+        mlflow.set_tracking_uri(get_mlflow_tracking_uri())
+
+        with mlflow.start_run(run_id=run_id):
+            mlflow.log_metrics(
+                {f"test_{name}": value for name, value in eval_metrics.items()}
+            )
+            data_version = get_data_version()
+            if data_version:
+                mlflow.set_tag("eval_data_version", data_version)
+
+        logger.info(
+            "Logged %d test metrics to MLflow run %s", len(eval_metrics), run_id
+        )
+    except Exception:
+        logger.warning(
+            "Logging evaluation metrics to MLflow failed; continuing.", exc_info=True
+        )
+        return False
+    return True

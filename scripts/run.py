@@ -36,8 +36,20 @@ def build_parser() -> argparse.ArgumentParser:
         default="configs",
         help="Directory containing the config file",
     )
-    parser.add_argument("--name", default=None, help="Override experiment name from config")
-    parser.add_argument("--source", default=None, help="Image/folder path for predict mode")
+    parser.add_argument(
+        "--name", default=None, help="Override experiment name from config"
+    )
+    parser.add_argument(
+        "--source", default=None, help="Image/folder path for predict mode"
+    )
+    parser.add_argument(
+        "--set",
+        dest="overrides",
+        action="append",
+        default=[],
+        metavar="KEY=VALUE",
+        help="Override a config value, e.g. --set train.epochs=50 (repeatable)",
+    )
 
     subparsers = parser.add_subparsers(dest="command", required=True)
     for cmd in ["download", "preprocess", "train", "eval", "predict"]:
@@ -49,7 +61,7 @@ def build_parser() -> argparse.ArgumentParser:
 def _load_config(args: argparse.Namespace) -> dict:
     """Load config from the CLI-selected project config file."""
     config_path = resolve_config_path(args.config_root, args.config)
-    return load_config(path=config_path)
+    return load_config(path=config_path, overrides=args.overrides)
 
 
 def _apply_name_override(config: dict, args: argparse.Namespace) -> None:
