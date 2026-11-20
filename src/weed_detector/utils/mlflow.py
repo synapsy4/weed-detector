@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import importlib
 import math
+import os
 import re
 import subprocess
 from datetime import UTC, datetime
@@ -19,6 +20,7 @@ from mlflow.exceptions import MlflowException
 from weed_detector.utils.env import (
     PROJECT_ROOT,
     get_dagshub_repo_url,
+    get_env,
     get_mlflow_experiment_name,
     get_mlflow_tracking_uri,
     load_project_env,
@@ -58,8 +60,21 @@ def _sanitize_mlflow_metrics(results_dict: dict) -> dict[str, float]:
     return sanitized
 
 
-def init_dagshub_tracking() -> bool:
-    """Initialize DagsHub-backed MLflow tracking when repo auth is available."""
+def init_dagshub_tracking(interactive: bool = True) -> bool:
+    """
+    Initialize DagsHub-backed MLflow tracking when repo auth is available.
+
+    With ``interactive=False`` (servers, containers) DagsHub is only initialized if
+    a token is set in ``DAGSHUB_USER_TOKEN``; otherwise dagshub.init would wait
+    for a browser-based OAuth login that can never complete.
+    """
+    if not interactive and not os.getenv("DAGSHUB_USER_TOKEN"):
+        logger.info(
+            "No DAGSHUB_USER_TOKEN set; skipping dagshub.init and using the MLflow "
+            "tracking settings from the environment."
+        )
+        return False
+
     try:
         dagshub = importlib.import_module("dagshub")
     except ImportError:
@@ -239,10 +254,14 @@ def get_git_commit() -> str | None:
     return result.stdout.strip() or None
 
 
-def get_registry_client() -> MlflowClient:
+def get_registry_client(interactive: bool = True) -> MlflowClient:
     """Set up DagsHub/MLflow tracking and return a client for the model registry."""
     load_project_env()
-    init_dagshub_tracking()
+    dagshub_token = get_env("DAGSHUB_TOKEN")
+    if dagshub_token:
+        # dagshub reads its token from DAGSHUB_USER_TOKEN
+        os.environ.setdefault("DAGSHUB_USER_TOKEN", dagshub_token)
+    init_dagshub_tracking(interactive=interactive)
     tracking_uri = get_mlflow_tracking_uri()
     mlflow.set_tracking_uri(tracking_uri)
     return MlflowClient(tracking_uri=tracking_uri, registry_uri=tracking_uri)

@@ -29,6 +29,7 @@ class PredictionResponse(BaseModel):
     predictions: list[Prediction]
     image_size: list[int]  # [width, height]
     model_name: str
+    model_version: str
 
 
 class HealthResponse(BaseModel):
@@ -36,3 +37,23 @@ class HealthResponse(BaseModel):
 
     status: str
     model_loaded: bool
+    model_version: str | None = None
+    model_alias: str | None = None
+
+
+class ReadyResponse(BaseModel):
+    """Response for GET /ready."""
+
+    ready: bool
+    model_name: str
+    model_version: str
+    model_alias: str
+
+
+class ReloadResponse(BaseModel):
+    """Response for POST /admin/reload."""
+
+    model_loaded: bool
+    model_version: str | None = None
+    model_alias: str | None = None
+    detail: str | None = None

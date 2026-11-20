@@ -5,10 +5,29 @@ services:
       dockerfile: docker/Dockerfile.api
     expose:
       - "8000"
+    # Registry credentials (DAGSHUB_USER_TOKEN, MLFLOW_TRACKING_*, ADMIN_TOKEN, ...)
+    # come from .env at runtime and are never baked into the image. Without the file
+    # the API still starts, but answers 503 until a model can be loaded.
+    env_file:
+      - path: .env
+        required: false
     environment:
       - PYTHONUNBUFFERED=1 # print statements and log messages appear immediately in the logs
     volumes:
-      - ./models:/app/models:ro
+      # Downloaded model versions: lets the API restart while the registry is down
+      - model-cache:/var/cache/weed-detector
+    healthcheck:
+      # Ready = a model is loaded (503 otherwise); the generous start period covers
+      # the first model download
+      test:
+        - CMD
+        - python
+        - -c
+        - "import urllib.request; urllib.request.urlopen('http://localhost:8000/ready', timeout=3)"
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 120s
     networks:
       - app-network
     restart: unless-stopped
@@ -27,6 +46,9 @@ services:
     networks:
       - app-network
     restart: unless-stopped
+
+volumes:
+  model-cache:
 
 networks:
   app-network:

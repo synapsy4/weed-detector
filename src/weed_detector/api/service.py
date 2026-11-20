@@ -5,8 +5,8 @@ Prediction service: wraps YOLO inference with validation.
 import io
 
 from PIL import Image
-from ultralytics import YOLO
 
+from weed_detector.api.model_provider import LoadedModel, ModelProvider
 from weed_detector.api.schemas import (
     BBox,
     Prediction,
@@ -14,12 +14,7 @@ from weed_detector.api.schemas import (
 )
 from weed_detector.config import load_config
 from weed_detector.inference import predict
-from weed_detector.model import load_model
-from weed_detector.utils import (
-    get_logger,
-    get_pretrained_weights_path,
-    get_weights_path,
-)
+from weed_detector.utils import get_logger
 
 logger = get_logger(__name__)
 
@@ -27,28 +22,25 @@ MAX_FILE_SIZE_MB = 10
 ALLOWED_MIME_TYPES = {"image/jpeg", "image/png"}
 
 
+class ModelNotAvailableError(RuntimeError):
+    """Raised when no model could be loaded from the registry or the local cache."""
+
+
 class PredictionService:
-    """Service that loads a YOLO model once and serves predictions."""
+    """Service that serves predictions with the model chosen by the provider."""
 
-    def __init__(self, config: dict | None = None):
+    def __init__(
+        self, config: dict | None = None, provider: ModelProvider | None = None
+    ):
         self.config = config or load_config()
-        self.model: YOLO | None = None
-        self.model_name = self.config["model"]["model_name"]
-        self._load_model()
+        if provider is None:
+            raise ValueError("PredictionService requires a ModelProvider")
+        self.provider = provider
 
-    def _load_model(self) -> None:
-        """Load the best trained weights, falling back to pretrained."""
-        weights_path = get_weights_path(self.config, cp="best")
-        if not weights_path.exists():
-            logger.info(
-                f"No trained weights found at '{weights_path}', "
-                f"falling back to pretrained weights"
-            )
-            weights_path = get_pretrained_weights_path(self.config)
-
-        logger.info(f"Loading model weights from '{weights_path}'")
-        self.model = load_model(weights_path)
-        logger.info("Model loaded successfully")
+    @property
+    def loaded(self) -> LoadedModel | None:
+        """The model version currently served, or None if none is available."""
+        return self.provider.current
 
     def validate_image(self, file_content: bytes, content_type: str) -> None:
         """Validate uploaded image MIME type and size."""
@@ -78,19 +70,27 @@ class PredictionService:
         conf_threshold: float = 0.25,
     ) -> PredictionResponse:
         """Run prediction on raw image bytes."""
-        self.validate_image(file_content, content_type)
+        loaded = self.loaded
+        if loaded is None:
+            raise ModelNotAvailableError(
+                self.provider.last_error or "No model available in the registry"
+            )
 
-        if self.model is None:
-            raise RuntimeError("Model not loaded")
+        self.validate_image(file_content, content_type)
 
         # Determine image size from bytes
         with Image.open(io.BytesIO(file_content)) as img:
             width, height = img.size
 
         pil_image = Image.open(io.BytesIO(file_content))
+        # Predict with the image size this model version was trained with
+        model_config = {
+            **self.config,
+            "model": {**self.config["model"], "imgsz": loaded.imgsz},
+        }
         result = predict(
-            model=self.model,
-            config=self.config,
+            model=loaded.model,
+            config=model_config,
             image_source=pil_image,
             conf_threshold=conf_threshold,
             visualize_result=False,
@@ -117,5 +117,6 @@ class PredictionService:
         return PredictionResponse(
             predictions=predictions,
             image_size=[width, height],
-            model_name=self.model_name,
+            model_name=loaded.registry_name,
+            model_version=loaded.version,
         )

@@ -52,11 +52,19 @@ def mock_service(monkeypatch):
 
     This allows testing route handlers without downloading YOLO weights.
     """
+    from types import SimpleNamespace
     from unittest.mock import MagicMock
 
     service = MagicMock(spec=PredictionService)
-    service.model = MagicMock()
-    service.model_name = "test-model"
+    service.loaded = SimpleNamespace(
+        model=MagicMock(),
+        registry_name="test-model",
+        version="3",
+        alias="production",
+        imgsz=64,
+    )
+    service.provider = MagicMock()
+    service.provider.last_error = None
 
     # Mock predict_from_bytes to return a valid response
     from weed_detector.api.schemas import (
@@ -76,6 +84,7 @@ def mock_service(monkeypatch):
         ],
         image_size=[512, 512],
         model_name="test-model",
+        model_version="3",
     )
 
     # Store on app state via monkeypatch of create_app is not straightforward,
