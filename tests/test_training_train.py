@@ -7,9 +7,8 @@ from unittest.mock import MagicMock, patch
 from weed_detector.training.train import train
 
 
-def test_train_resumes_when_weights_exist_and_not_blocking(tmp_path):
-    """train should resume when 'last.pt' exists and resume_blocking is False."""
-    config = {
+def _continue_config(tmp_path):
+    return {
         "train": {"resume_blocking": False, "epochs": 2, "batch_size": 16},
         "paths": {
             "models_trained_dir": str(tmp_path),
@@ -19,23 +18,48 @@ def test_train_resumes_when_weights_exist_and_not_blocking(tmp_path):
         "seed": 99,
     }
 
-    # Create existing last.pt to trigger resume path
+
+def _write_last_pt(tmp_path):
     weights_dir = tmp_path / "test_model" / "train" / "weights"
     weights_dir.mkdir(parents=True)
     (weights_dir / "last.pt").write_text("dummy")
+    return weights_dir / "last.pt"
+
+
+def test_train_warm_starts_from_last_pt(tmp_path):
+    """train should warm start from 'last.pt' when weights exist and not blocking."""
+    config = _continue_config(tmp_path)
+    last_pt = _write_last_pt(tmp_path)
 
     mock_model = MagicMock()
     mock_metrics = MagicMock()
     mock_model.train.return_value = mock_metrics
 
-    with patch("weed_detector.training.train.load_model", return_value=mock_model):
+    with patch(
+        "weed_detector.training.train.load_model", return_value=mock_model
+    ) as mock_load:
         metrics = train(config=config)
 
     assert metrics is mock_metrics
-    mock_model.train.assert_called_once()
-    # Check resume=True was passed
-    call_kwargs = mock_model.train.call_args.kwargs
-    assert call_kwargs["resume"] is True
+    # Weights come from last.pt (never best.pt), without resuming
+    mock_load.assert_called_once_with(last_pt)
+    assert mock_model.train.call_args.kwargs["resume"] is False
+
+
+def test_warm_start_archives_previous_results_csv(tmp_path):
+    """A warm start must not let the previous run's results.csv be overwritten."""
+    config = _continue_config(tmp_path)
+    _write_last_pt(tmp_path)
+    out_dir = tmp_path / "test_model" / "train"
+    (out_dir / "results.csv").write_text("epoch\n1\n")
+
+    with patch("weed_detector.training.train.load_model", return_value=MagicMock()):
+        train(config=config)
+
+    assert not (out_dir / "results.csv").exists()
+    archived = list(out_dir.glob("results_*.csv"))
+    assert len(archived) == 1
+    assert archived[0].read_text() == "epoch\n1\n"
 
 
 def test_train_aborts_when_weights_exist_and_blocking(tmp_path):

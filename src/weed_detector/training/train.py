@@ -4,6 +4,9 @@ YOLO training function
 
 from __future__ import annotations
 
+from datetime import UTC, datetime
+from pathlib import Path
+
 from ultralytics.utils.metrics import DetMetrics
 
 from weed_detector.model import load_model
@@ -17,6 +20,25 @@ from weed_detector.utils import (
 )
 
 logger = get_logger(__name__)
+
+
+def _archive_results_csv(model_out_dir: Path) -> Path | None:
+    """
+    Keep the per-epoch history of the previous run before a warm start.
+
+    A warm start restarts epoch numbering and Ultralytics would overwrite
+    'results.csv' in the shared output dir.
+    """
+    results_csv = model_out_dir / "results.csv"
+    if not results_csv.exists():
+        return None
+
+    timestamp = datetime.now(UTC).strftime("%Y%m%d-%H%M%S")
+    archived = model_out_dir / f"results_{timestamp}.csv"
+    results_csv.rename(archived)
+    logger.info(f"Archived previous results to '{archived}'")
+
+    return archived
 
 
 def train(config: dict) -> DetMetrics | None:
@@ -38,9 +60,16 @@ def train(config: dict) -> DetMetrics | None:
             )
             return None
 
-        logger.info(f"Resuming training from existing weights: '{weights_path}'")
+        # Ultralytics strips optimizer and epoch state from finished runs, so only
+        # the weights can be reused (fresh optimizer, epoch counter restarts at 0)
+        logger.info(
+            f"Continuing training with warm start from weights '{weights_path}' "
+            "(fresh optimizer)"
+        )
+        _archive_results_csv(model_out_dir)
+
         kwargs = build_train_kwargs(
-            config=config, model_out_dir=model_out_dir, resume=True
+            config=config, model_out_dir=model_out_dir, resume=False
         )
     else:
         # For new model, create out dir

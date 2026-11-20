@@ -9,6 +9,30 @@ from weed_detector.api.main import create_app
 from weed_detector.api.service import PredictionService
 
 
+@pytest.fixture(autouse=True)
+def isolate_mlflow(monkeypatch, tmp_path):
+    """
+    Guarantee that no test can log to a real MLflow/DagsHub backend.
+
+    The project's .env is not loaded, credentials are removed, DagsHub init is
+    a no-op and the tracking URI points to a throwaway local file store.
+    Individual tests can still override these via monkeypatch.
+    """
+    monkeypatch.setattr("weed_detector.utils.env.load_dotenv", lambda *a, **k: False)
+    for var in (
+        "DAGSHUB_REPO_URL",
+        "DAGSHUB_TOKEN",
+        "DAGSHUB_USER_TOKEN",
+        "MLFLOW_TRACKING_TOKEN",
+        "MLFLOW_TRACKING_USERNAME",
+        "MLFLOW_TRACKING_PASSWORD",
+        "MLFLOW_EXPERIMENT_NAME",
+    ):
+        monkeypatch.delenv(var, raising=False)
+    monkeypatch.setenv("MLFLOW_TRACKING_URI", f"file:{tmp_path / 'mlruns'}")
+    monkeypatch.setattr("dagshub.init", lambda *a, **k: None)
+
+
 @pytest.fixture
 def app():
     """Create a FastAPI app instance without triggering model loading."""

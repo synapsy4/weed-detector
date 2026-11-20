@@ -7,7 +7,7 @@ data:
 model:
   model_name: modelv0
   pretrained_weights: yolov8n.pt
-  imgsz: 64 #512
+  imgsz: 64
 
 train:
   epochs: 1
